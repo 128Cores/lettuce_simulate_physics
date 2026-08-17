@@ -2,6 +2,8 @@ import sys
 import random
 import pygame
 
+# there's a die on screen that determines the gravity of the balls, higher roll, more gravity and vice versa
+
 class Dice:
     def __init__(self, x, y):
         self.x_pos = x
@@ -10,7 +12,7 @@ class Dice:
 
         self.size = 70
 
-        self.gravity_values = {
+        self.gravity_values = { # higher roll, more gravity
             1: 0.1,
             2: 0.3,
             3: 0.6,
@@ -35,13 +37,13 @@ class Dice:
             self.size
         )
 
-        pygame.draw.rect(screen, "WHITE", dice_rect, border_radius=2)
-        pygame.draw.rect(screen, "BLACK", dice_rect, width=2, border_radius=2)
-        text_surface = self.font.render(f"{self.value}", True, "BLACK")
-        text_rect = text_surface.get_rect(center=dice_rect.center)
+        pygame.draw.rect(screen, "WHITE", dice_rect, border_radius=2) # the white box is the die
+        pygame.draw.rect(screen, "BLACK", dice_rect, width=2, border_radius=2) # the black outline of the die
+        text_surface = self.font.render(f"{self.value}", True, "BLACK") # the value of the die
+        text_rect = text_surface.get_rect(center=dice_rect.center) # centers the value of the die
         screen.blit(text_surface, text_rect)
 
-if __name__ == "__main__":
+if __name__ == "__main__": ## only runs if the file is run directly to test and stuff
     pygame.init()
 
     screen= pygame.display.set_mode((400, 400))
