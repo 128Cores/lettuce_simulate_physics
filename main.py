@@ -3,6 +3,7 @@ import math
 import pygame
 from ball import Ball
 from utils import handle_ball_collisions
+from dice import Dice
 
 ## This is all a pretty standard pygame setup. Initalizing the window and a game clock.
 
@@ -27,6 +28,8 @@ active_selection = False
 mouse_trajectory = []
 
 balls = [] ##starts empty, click an empty spot to spawn a ball
+dice = Dice(900,25)
+
 
 def draw_walls():
 	left = pygame.draw.line(screen,"GREEN",(0,0),(0, WINDOW_HEIGHT), WALL_THICKNESS)
@@ -50,7 +53,10 @@ while running:
 				if ball.check_select(event.pos): #pass the position of the mouse over to the function
 					active_selection = True
 			if not active_selection: ##clicked an empty spot, spawn a fresh random ball there
-				balls.append(Ball(x_pos=event.pos[0], y_pos=event.pos[1], id=len(balls)))
+				dice.roll()
+
+				ball_gravity = dice.get_gravity()
+				balls.append(Ball(x_pos=event.pos[0], y_pos=event.pos[1], id=len(balls), gravity=ball_gravity))
 		if event.type == pygame.MOUSEBUTTONUP:
 			active_selection = False
 			for ball in balls:
@@ -63,7 +69,7 @@ while running:
 
 ##UPDATE POSITIONS
 	for ball in balls:
-		ball.apply_gravity_and_velocity(WINDOW_HEIGHT, WINDOW_WIDTH, WALL_THICKNESS,gravity, mouse_trajectory)
+		ball.apply_gravity_and_velocity(WINDOW_HEIGHT, WINDOW_WIDTH, WALL_THICKNESS, mouse_trajectory)
 		ball.update_position(mouse_position)
 
 	handle_ball_collisions(balls) ##this makes da balls bounce off eachother
@@ -74,6 +80,7 @@ while running:
 	for ball in balls:
 		ball.draw(screen)
 	screen.blit(help_text, (WALL_THICKNESS + 5, WALL_THICKNESS + 5)) ##little instructions in the top left corner
+	dice.draw(screen)
 	pygame.display.flip()
 	clock.tick(FPS)
 
