@@ -18,7 +18,7 @@ clock = pygame.time.Clock()
 FPS = 60
 
 font = pygame.font.SysFont(None, 24)
-help_text = font.render("click to spawn ball. click and drag ball to throw ball", True, "WHITE")
+help_text = font.render("click to spawn ball. click and drag ball to throw ball. hold shift while dragging to lasso", True, "WHITE")
 
 ##GAME VARIABLES / CONSTS
 WALL_THICKNESS = 10
@@ -75,7 +75,7 @@ while running:
 				if len(lasso_points) >= 3:
 					for ball in balls:
 						if point_in_polygon(ball.get_center(), lasso_points):
-							print("Ball is in polygonnnn")
+							print("Ball explosion")
 
 
 		if event.type == pygame.MOUSEBUTTONDOWN and not lasso_active: ##check for mouse clicks

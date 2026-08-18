@@ -7,6 +7,7 @@ A little pygame sandbox with bouncy balls. Click anywhere empty to spawn a ball 
 - **Click empty space** — spawn a random ball
 - **Click + drag a ball** — pick it up
 - **Release while moving the mouse** — throw it
+- **Hold shift and drag** — draw lasso
 
 ## Setup
 
