@@ -46,6 +46,9 @@ class Ball:
 		rect = self.image.get_rect(center=(int(self.x_pos), int(self.y_pos)))
 		screen.blit(self.image, rect)
 
+	def get_center(self):
+		return (self.x_pos, self.y_pos)
+
 	def update_position(self, mouse_position):
 		if not self.selected:
 			self.y_pos += self.y_speed

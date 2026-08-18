@@ -44,3 +44,24 @@ def handle_ball_collisions(balls):
 					if not ball2.selected:
 						ball2.x_speed += impulse * ball1.mass * normal_x
 						ball2.y_speed += impulse * ball1.mass * normal_y
+
+
+def point_in_polygon(point, polygon):
+	x, y = point
+
+	inside = False
+
+	j = len(polygon) - 1
+
+	for i in range(len(polygon)):
+		xi, yi = polygon[i]
+		xj, yj = polygon[j]
+
+		if (yi > y) != (yj > y):
+			x_intersection = (xj - xi) * (y - yi) / (yj - yi) + xi
+			if x < x_intersection:
+				inside = not inside
+
+		j = i
+
+	return inside

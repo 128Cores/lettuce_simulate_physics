@@ -2,7 +2,7 @@ import sys
 import math
 import pygame
 from ball import Ball
-from utils import handle_ball_collisions
+from utils import *
 from dice import Dice
 
 ## This is all a pretty standard pygame setup. Initalizing the window and a game clock.
@@ -39,6 +39,13 @@ def draw_walls():
 	wall_list = [left,right,top,bottom]
 	return wall_list
 
+
+lasso_active = False
+lasso_points = []
+
+lasso_fade_start = None
+LASSO_FADE_TIME = 1000 # ms
+
 ##MAIN GAME LOOP (runs 4ever)
 running = True
 while running:
@@ -48,7 +55,30 @@ while running:
 		if event.type == pygame.QUIT: ##basically if the user closes the window, stop running da game
 			running = False
 
-		if event.type == pygame.MOUSEBUTTONDOWN: ##check for mouse clicks
+		# Let user start drawing lasso
+		if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+			keys = pygame.key.get_pressed()
+
+			if keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]:
+				lasso_active = True
+				lasso_points = [event.pos]
+
+		if event.type == pygame.MOUSEMOTION and lasso_active:
+			lasso_points.append(event.pos)
+
+		if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+			if lasso_active:
+				lasso_active = False
+				lasso_fade_start = pygame.time.get_ticks()
+
+				# Check which balls are in lasso area
+				if len(lasso_points) >= 3:
+					for ball in balls:
+						if point_in_polygon(ball.get_center(), lasso_points):
+							print("Ball is in polygonnnn")
+
+
+		if event.type == pygame.MOUSEBUTTONDOWN and not lasso_active: ##check for mouse clicks
 			
 			if not active_selection: ##clicked an empty spot, spawn a fresh random ball there
 				dice.roll()
@@ -60,7 +90,7 @@ while running:
 			for ball in balls:
 				if ball.check_select(event.pos): #pass the position of the mouse over to the function
 					active_selection = True
-					
+
 		if event.type == pygame.MOUSEBUTTONUP:
 			active_selection = False
 			for ball in balls:
@@ -88,6 +118,25 @@ while running:
 		ball.draw(screen)
 	screen.blit(help_text, (WALL_THICKNESS + 5, WALL_THICKNESS + 5)) ##little instructions in the top left corner
 	dice.draw(screen)
+
+	if len(lasso_points) >= 2:
+		alpha = 255
+
+		if not lasso_active and lasso_fade_start is not None:
+			elapsed = pygame.time.get_ticks() - lasso_fade_start
+
+			alpha = max(0, 255 * (1 - elapsed / LASSO_FADE_TIME))
+
+			if elapsed >= LASSO_FADE_TIME:
+				lasso_points = []
+				lasso_fade_start = None
+		if lasso_points:
+			lasso_surface = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+			
+			pygame.draw.lines(lasso_surface, (255, 0, 0, int(alpha)), False, lasso_points, 5)
+
+			screen.blit(lasso_surface, (0, 0))
+
 	pygame.display.flip()
 	clock.tick(FPS)
 
