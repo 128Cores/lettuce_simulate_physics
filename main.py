@@ -49,14 +49,18 @@ while running:
 			running = False
 
 		if event.type == pygame.MOUSEBUTTONDOWN: ##check for mouse clicks
-			for ball in balls:
-				if ball.check_select(event.pos): #pass the position of the mouse over to the function
-					active_selection = True
+			
 			if not active_selection: ##clicked an empty spot, spawn a fresh random ball there
 				dice.roll()
 
 				ball_gravity = dice.get_gravity()
 				balls.append(Ball(x_pos=event.pos[0], y_pos=event.pos[1], id=len(balls), gravity=ball_gravity))
+				active_selection = False
+
+			for ball in balls:
+				if ball.check_select(event.pos): #pass the position of the mouse over to the function
+					active_selection = True
+					
 		if event.type == pygame.MOUSEBUTTONUP:
 			active_selection = False
 			for ball in balls:
@@ -69,10 +73,13 @@ while running:
 
 ##UPDATE POSITIONS
 	for ball in balls:
-		ball.apply_gravity_and_velocity(WINDOW_HEIGHT, WINDOW_WIDTH, WALL_THICKNESS, mouse_trajectory)
+		ball.apply_gravity_and_velocity(WINDOW_HEIGHT, WALL_THICKNESS, mouse_trajectory)
 		ball.update_position(mouse_position)
 
 	handle_ball_collisions(balls) ##this makes da balls bounce off eachother
+
+	for ball in balls:
+		ball.bounds(WINDOW_WIDTH, WINDOW_HEIGHT, WALL_THICKNESS)
 
 ##RENDER ALL STUFF
 	screen.fill(BACKGROUND_COLOR)
