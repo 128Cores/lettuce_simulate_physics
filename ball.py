@@ -88,8 +88,9 @@ class Ball:
 		if self.y_pos > floor_y:
 			self.y_pos = floor_y
 
-			if self.y_speed > self.gravity + bounce_stop:
-				self.y_speed = self.y_speed * -1 * self.retention
+			rebound = self.y_speed * self.retention - self.gravity ## minus one frame of gravity, else the floor snap-up feeds balls energy and they bounce forever
+			if rebound > bounce_stop:
+				self.y_speed = -rebound
 			else:
 				self.y_speed = 0
 

@@ -79,17 +79,16 @@ while running:
 
 
 		if event.type == pygame.MOUSEBUTTONDOWN and not lasso_active: ##check for mouse clicks
-			
+
+			for ball in balls:
+				if ball.check_select(event.pos): #pass the position of the mouse over to the function
+					active_selection = True
+
 			if not active_selection: ##clicked an empty spot, spawn a fresh random ball there
 				dice.roll()
 
 				ball_gravity = dice.get_gravity()
 				balls.append(Ball(x_pos=event.pos[0], y_pos=event.pos[1], id=len(balls), gravity=ball_gravity))
-				active_selection = False
-
-			for ball in balls:
-				if ball.check_select(event.pos): #pass the position of the mouse over to the function
-					active_selection = True
 
 		if event.type == pygame.MOUSEBUTTONUP:
 			active_selection = False
