@@ -45,6 +45,15 @@ def handle_ball_collisions(balls):
 						ball2.x_speed += impulse * ball1.mass * normal_x
 						ball2.y_speed += impulse * ball1.mass * normal_y
 
+				# Check if impacted ball is on fire
+				# 	if so, they will set each other on fire
+				#	This currently will immediately engulf all balls in flames if they are near each other
+				# If you feel like making it spread cooler then please go ahead
+				# (I'm burning out)
+				if ball1.fire_effect.active and not ball2.fire_effect.active:
+					ball2.fire_effect.active = True
+				elif ball2.fire_effect.active and not ball1.fire_effect.active:
+					ball1.fire_effect.active = True
 
 def point_in_polygon(point, polygon):
 	x, y = point

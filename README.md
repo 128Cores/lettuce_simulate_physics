@@ -1,13 +1,15 @@
 # physics_simulation
 
 A little pygame sandbox with bouncy balls. Click anywhere empty to spawn a ball with random size, color, mass, bounciness, and friction. Click and drag a ball to pick it up, then release to throw it — the throw velocity comes from your recent mouse movement. Balls bounce off the walls and off each other (mass-based elastic collisions, so heavy balls shove light ones around).
+Balls can also be set on fire, which increases their time to be on fire 
 
 ## Controls
 
-- **Click empty space** — spawn a random ball
-- **Click + drag a ball** — pick it up
+- **Left click empty space** — spawn a random ball
+- **Left click + drag a ball** — pick it up
 - **Release while moving the mouse** — throw it
 - **Hold shift and drag** — draw lasso
+- **Right click a ball** — set the ball on fire
 
 ## Setup
 
@@ -24,3 +26,5 @@ python main.py
 - `main.py` — pygame setup, event handling, and the main game loop
 - `ball.py` — the `Ball` class: gravity, wall bounces, floor friction, mouse selection
 - `utils.py` — throw vector calculation and ball-to-ball collision handling
+- `particle.py` — reusable particle class for an effect controller to use
+- `fire_effect.py` — fire effect that is used when a ball is on fire
