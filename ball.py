@@ -1,17 +1,12 @@
 import os
 import pygame
 import random
+import math
+from ash import Ash
 from fire_effect import FireEffect
 from explosion_effect import ExplosionEffect
 from utils import calc_mouse_vector
 from constants import ROOM_TEMP, BALLS_DIR
-
-sprite_paths = [
-    os.path.join(BALLS_DIR, f)
-    for f in os.listdir(BALLS_DIR)
-    if f.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
-]
-
 
 def make_circular_image(image_path, radius):
     size = radius * 2
@@ -33,6 +28,7 @@ bounce_stop = 0.3  ##this variable is used to check for really tiny bounces and 
 max_burn_level = (
     100.0  # This variable is maximum burn level before the ball is destroyed
 )
+ashes = [] #just like how the balls spawn
 
 # I wanted to add some sort of liquid or something that could extinguish
 #     the balls, but I'm not experienced in liquid simulations
@@ -46,24 +42,26 @@ max_burn_level = (
 
 
 class Ball:
-    def __init__(self, x_pos, y_pos, id, gravity, y_speed=0, x_speed=0):
+    def __init__(self, x_pos, y_pos, id, gravity, y_speed=0, x_speed=0, max_level=4):
         self.x_pos = x_pos
         self.y_pos = y_pos
         self.radius = random.randint(
-            15, 60
+            25, 45
         )  ##every ball gets random attributes when its spawned
-        self.image = make_circular_image(random.choice(sprite_paths), self.radius)
+        self.level = int(random.uniform(max(1, max_level-4),max_level))
+        self.image = make_circular_image(f'assets/balls/{self.level}.png', self.radius)
         self.density = random.uniform(0.5, 2)
         self.mass = int(
             20 + self.radius * 4 * self.density
         )  # 50 - 500, but based on size and random density to feel more natural
         self.retention = random.uniform(0.7, 0.95)
         self.friction = random.uniform(0.05, 0.3)
+        self.angle = 0 #for making the balls rotate
+        self.angular_speed = 0 #because apparently rotation is super complicated
         self.gravity = gravity
         self.y_speed = y_speed
         self.x_speed = x_speed
         self.id = id
-        self.selected = False
         self.fire_effect = FireEffect(self.x_pos, self.y_pos, self.radius)
         self.temperature = ROOM_TEMP  # Temperature is in °C
         self.ignition_temp = 100.0  # Temperature required for a ball to catch on fire
@@ -91,65 +89,60 @@ class Ball:
             (red_color, green_blue_color, green_blue_color, 255),
             special_flags=pygame.BLEND_RGBA_MULT,
         )
+        tex_rot = pygame.transform.rotate(texture, self.angle)
 
         # Fill the texture
-        rect = texture.get_rect(center=(int(self.x_pos), int(self.y_pos)))
-        screen.blit(texture, rect)
+        rect = tex_rot.get_rect(center=(int(self.x_pos), int(self.y_pos)))
+        screen.blit(tex_rot, rect)
         # Draw the fire effect
         self.fire_effect.draw(screen)
 
     def get_center(self):
         return (self.x_pos, self.y_pos)
 
-    def update_position(self, mouse_position):
+    def update_position(self):
         self.fire_effect.update_pos(self.x_pos, self.y_pos)
         self.fire_effect.update()
-        self.update_temp()
+        #self.update_temp()
+        self.update_fire()
 
-        if not self.selected:
-            self.y_pos += self.y_speed
-            self.x_pos += self.x_speed
-        else:
-            self.x_pos = mouse_position[0]
-            self.y_pos = mouse_position[1]
+        self.y_pos += self.y_speed
+        self.x_pos += self.x_speed
+        self.angle += self.angular_speed
+        self.angular_speed *= 0.98
 
-    def apply_gravity_and_velocity(
-        self, WINDOW_HEIGHT, WALL_THICKNESS, mouse_trajectory
-    ):
-        if (
-            not self.selected
-        ):  ## apply normal gravity and bounce rules as long as the ball is not selected
-            if self.y_pos < self.floor(
-                WINDOW_HEIGHT, WALL_THICKNESS
-            ):  ## if the ball's y position is less than the bottom of the screen pretty much
-                self.y_speed += self.gravity
+    def update_image(self):
+        self.image = make_circular_image(f'assets/balls/{self.level}.png', self.radius)
 
-            if (
-                self.y_speed == 0 and self.x_speed != 0
-            ):  ## ball is rolling along the ground, slow it down
-                if self.x_speed > 0:
-                    self.x_speed -= self.friction
-                else:
-                    self.x_speed += self.friction
-                if abs(self.x_speed) < self.friction:
-                    self.x_speed = 0
+    def apply_gravity_and_velocity(self, WINDOW_HEIGHT, WALL_THICKNESS):
+        if self.y_pos < self.floor(WINDOW_HEIGHT, WALL_THICKNESS):  ## if the ball's y position is less than the bottom of the screen pretty much
+            self.y_speed += self.gravity
 
-        else:  ## if the ball is selected, reset its x and y speed
-            self.x_speed, self.y_speed = calc_mouse_vector(mouse_trajectory)
+        if (self.y_speed == 0 and self.x_speed != 0):  ## ball is rolling along the ground, slow it down
+            if self.x_speed > 0:
+                self.x_speed -= self.friction
+            else:
+                self.x_speed += self.friction
+            if abs(self.x_speed) < self.friction:
+                self.x_speed = 0
 
     def increase_burn(self):
         if self.fire_effect.active:
-            self.burn_level = self.burn_level + 0.1
+            self.burn_level = self.burn_level + random.uniform(0.1,0.3)
         if self.burn_level >= max_burn_level:
+            # ASHES nonsense here
+            for dx in range(-int(self.radius), int(self.radius) + 1, 8):
+                for dy in range(-int(self.radius), int(self.radius) + 1, 8):
+                    if dx*dx + dy*dy <= self.radius * self.radius: ##literally span then inside the entire ball circle
+                        ashes.append(Ash(x_pos=self.x_pos + dx, y_pos=self.y_pos + dy, id=len(ashes), gravity=self.gravity,
+                                         x_speed=self.x_speed + random.uniform(-1, 1), #give the ashes left/right motion
+                                         y_speed=self.y_speed + random.uniform(-1, 0))) #screw it, also up/down random
             self.active = False
 
     def floor(self, WINDOW_HEIGHT, WALL_THICKNESS):
         return WINDOW_HEIGHT - self.radius - (WALL_THICKNESS / 2)
 
     def bounds(self, WINDOW_WIDTH, WINDOW_HEIGHT, WALL_THICKNESS):
-        if self.selected:
-            return
-
         floor_y = self.floor(WINDOW_HEIGHT, WALL_THICKNESS)
         left_x = self.radius + WALL_THICKNESS / 2
         right_x = WINDOW_WIDTH - self.radius - WALL_THICKNESS / 2
@@ -157,9 +150,10 @@ class Ball:
         if self.y_pos > floor_y:
             self.y_pos = floor_y
 
-            rebound = (
-                self.y_speed * self.retention - self.gravity
-            )  ## minus one frame of gravity, else the floor snap-up feeds balls energy and they bounce forever
+            self.angular_speed += self.x_speed / self.radius
+
+            rebound = self.y_speed * self.retention - self.gravity ## minus one frame of gravity, else the floor snap-up feeds balls energy and they bounce forever
+
             if rebound > bounce_stop:
                 self.y_speed = -rebound
             else:
@@ -167,6 +161,8 @@ class Ball:
 
         if self.x_pos < left_x:
             self.x_pos = left_x
+
+            self.angular_speed -= self.x_speed / self.radius
 
             if self.x_speed < 0:
                 self.x_speed *= -1 * self.retention
@@ -177,19 +173,13 @@ class Ball:
         elif self.x_pos > right_x:
             self.x_pos = right_x
 
+            self.angular_speed += self.x_speed / self.radius
+
             if self.x_speed > 0:
                 self.x_speed *= -1 * self.retention
 
                 if abs(self.x_speed) < bounce_stop:
                     self.x_speed = 0
-
-    def check_select(self, pos):
-        self.selected = False
-        dx = pos[0] - self.x_pos
-        dy = pos[1] - self.y_pos
-        if dx**2 + dy**2 <= self.radius**2:
-            self.selected = True
-        return self.selected
 
     # I made this because the other one both checks if it's being selected
     #        and selects it, but I just wanted to check if it was within the click
@@ -206,14 +196,26 @@ class Ball:
         self.y_speed += force_y
 
     def update_temp(self):
-        # Keep burning balls at high temp
-        if self.fire_effect.active:
-            self.temperature = self.flame_temp
-        else:
-            # Cool down if the temp is above room temp
-            if self.temperature > ROOM_TEMP:
-                self.temperature -= 0.15
-                self.temperature = max(ROOM_TEMP, self.temperature)
+        # Cool down if the temp is above room temp
+        if self.temperature > ROOM_TEMP:
+            self.temperature -= 150
+            self.temperature = max(ROOM_TEMP, self.temperature)
 
-            if self.temperature >= self.ignition_temp:
-                self.fire_effect.active = True
+        if self.temperature >= self.ignition_temp:
+            self.fire_effect.active = True
+        else:
+            self.temperature = ROOM_TEMP
+            #self.burn_level = 0
+            self.fire_effect.active = False
+
+    def update_fire(self):
+        if self.temperature > ROOM_TEMP:
+            self.temperature -= 0.1
+            self.temperature = max(ROOM_TEMP, self.temperature)
+            
+        if self.temperature >= self.ignition_temp:
+            self.fire_effect.active = True
+        else:
+            self.temperature = ROOM_TEMP
+            #self.burn_level = 0
+            self.fire_effect.active = False

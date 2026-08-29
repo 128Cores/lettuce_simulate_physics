@@ -1,7 +1,9 @@
 import sys
 import math
 import pygame
-from ball import Ball
+import random
+from ball import Ball, ashes
+from ash import Ash
 from utils import *
 from dice import Dice
 from explosion_effect import ExplosionEffect
@@ -18,7 +20,7 @@ clock = pygame.time.Clock()
 
 font = pygame.font.SysFont(None, 24)
 help_text = font.render(
-    "Click to spawn ball. Click and drag ball to throw ball.", True, "WHITE"
+    "Click to spawn ball.", True, "WHITE"
 )
 help_text2 = font.render("Right click a ball to ignite it.", True, "WHITE")
 help_text3 = font.render(
@@ -26,17 +28,17 @@ help_text3 = font.render(
     True,
     "WHITE",
 )
-
+big_font = pygame.font.SysFont(None, 32, bold=True)
 
 ##GAME VARIABLES
 gravity = 0.6
-active_selection = False
 mouse_trajectory = []
 
 balls = []  ##starts empty, click an empty spot to spawn a ball
 explosions = []
 dice = Dice(900, 25)
-
+current_level = 4
+won = False
 
 def draw_walls():
     left = pygame.draw.line(
@@ -62,6 +64,20 @@ def draw_walls():
     wall_list = [left, right, top, bottom]
     return wall_list
 
+def draw_max_balls():
+    pygame.draw.rect(screen, (20, 20, 20), (880, 15, 135, 105), border_radius=12)
+    pygame.draw.rect(screen, (100, 100, 100), (880, 15, 135, 105), 2, border_radius=12)
+
+    if not balls: return
+    global current_level
+
+    max_ball = max(balls, key=lambda ball: ball.level)
+    current_level = max(4, max_ball.level)
+    image = pygame.transform.scale(max_ball.image, (80, 80))
+    screen.blit(image, (900, 25))
+
+    text = big_font.render(str(max_ball.level), True, "WHITE")
+    screen.blit(text, (990, 50))
 
 # Calculating explosion forces
 def explosion_knockback(explosion_x, explosion_y, balls, blast_radius):
@@ -94,7 +110,6 @@ def explosion_knockback(explosion_x, explosion_y, balls, blast_radius):
 
             transfered_heat = (BASE_EXPLOSION_HEAT / (ball.mass / 100.0)) * falloff
             ball.temperature += transfered_heat
-
 
 lasso_active = False
 lasso_points = []
@@ -143,47 +158,30 @@ while running:
 
                             ball.active = False
 
-        if (
-            event.type == pygame.MOUSEBUTTONDOWN
-            and not lasso_active
-            and event.button == 1
-        ):  ##check for left mouse clicks
+        if (event.type == pygame.MOUSEBUTTONDOWN and not lasso_active and event.button == 1):  ##check for left mouse clicks
+            active_selection = False
 
             for ball in balls:
-                if ball.check_select(
-                    event.pos
-                ):  # pass the position of the mouse over to the function
+                if ball.check_if_selected(event.pos):  # pass the position of the mouse over to the function
+                    ball.update_temp()
                     active_selection = True
 
-            if (
-                not active_selection
-            ):  ##clicked an empty spot, spawn a fresh random ball there
+            if not active_selection:  ##clicked an empty spot, spawn a fresh random ball there
                 dice.roll()
 
                 ball_gravity = dice.get_gravity()
-                balls.append(
-                    Ball(
+                balls.append(Ball(
                         x_pos=event.pos[0],
                         y_pos=event.pos[1],
                         id=len(balls),
                         gravity=ball_gravity,
-                    )
-                )
-        if (
-            event.type == pygame.MOUSEBUTTONDOWN
-            and not lasso_active
-            and event.button == 3
-        ):  # Check for right mouse clicks
+                        max_level=current_level
+                    ))
+        if (event.type == pygame.MOUSEBUTTONDOWN and not lasso_active and event.button == 3):  # Check for right mouse clicks
             for ball in balls:
                 if ball.check_if_selected(event.pos):  # If ball clicked
-                    ball.fire_effect.active = True
-
-        if event.type == pygame.MOUSEBUTTONUP:
-            active_selection = False
-            for ball in balls:
-                ball.check_select(
-                    (-1000, -1000)
-                )  ##value that's outside of the playable area
+                    ball.temperature = 400
+                    ball.update_temp()
 
     mouse_position = pygame.mouse.get_pos()  ## store mouse position
     mouse_trajectory.append(
@@ -205,15 +203,37 @@ while running:
             balls.remove(ball)
 
     for ball in balls:
-        ball.apply_gravity_and_velocity(WINDOW_HEIGHT, WALL_THICKNESS, mouse_trajectory)
-        ball.update_position(mouse_position)
+        ball.apply_gravity_and_velocity(WINDOW_HEIGHT, WALL_THICKNESS)
+        ball.update_position()
         ball.increase_burn()
 
+    ashes[:] = [ash for ash in ashes if ash.active]
+
+    for ash in ashes:
+        ash.apply_gravity_and_velocity(WINDOW_HEIGHT, WALL_THICKNESS)
+        ash.update_position()
+        ash.increase_burn()
+
     handle_ball_collisions(balls)  ##this makes da balls bounce off eachother
+    if any(ball.level >= 37 for ball in balls):
+        won = True
+    handle_ash_collisions(ashes)
 
     for ball in balls:
         ball.bounds(WINDOW_WIDTH, WINDOW_HEIGHT, WALL_THICKNESS)
+    for ash in ashes:
+            ash.bounds(WINDOW_WIDTH, WINDOW_HEIGHT, WALL_THICKNESS)
 
+    # Random explosion
+    if random.randint(1, 4000//current_level) == 1:
+        x = random.randint(WALL_THICKNESS + 10, WINDOW_WIDTH - WALL_THICKNESS - 10)
+        y = random.randint(WALL_THICKNESS + 10, WINDOW_HEIGHT - WALL_THICKNESS - 10)
+
+        explosion = ExplosionEffect(x, y, random.randint(30, 50))
+        explosions.append(explosion)
+
+        explosion_knockback(x, y, balls, explosion.blast_radius)
+        
     # Update active explosions
     for explosion in explosions:
         explosion.update()
@@ -224,14 +244,16 @@ while running:
     ##RENDER ALL STUFF
     screen.fill(BACKGROUND_COLOR)
     draw_walls()
+    draw_max_balls()
     for ball in balls:
         ball.draw(screen)
+    for ash in ashes:
+        ash.draw(screen)
     screen.blit(
         help_text, (WALL_THICKNESS + 5, WALL_THICKNESS + 5)
     )  ##little instructions in the top left corner
     screen.blit(help_text2, (WALL_THICKNESS + 5, WALL_THICKNESS + 25))
     screen.blit(help_text3, (WALL_THICKNESS + 5, WALL_THICKNESS + 45))
-    dice.draw(screen)
 
     if len(lasso_points) >= 2:
         alpha = 255
@@ -257,6 +279,10 @@ while running:
     for explosion in explosions:
         explosion.draw(screen)
 
+    if won:
+        win_text = big_font.render("You win!", True, "WHITE")
+        screen.blit(win_text, win_text.get_rect(center=(WINDOW_WIDTH // 2, 100)))
+        
     pygame.display.flip()
     clock.tick(FPS)
 

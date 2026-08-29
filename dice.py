@@ -16,11 +16,11 @@ class Dice:
         self.size = 70
 
         self.gravity_values = {  # higher roll, more gravity
-            1: 0.1,
-            2: 0.3,
-            3: 0.6,
-            4: 1,
-            5: 1.5,
+            1: 0.6,
+            2: 0.9,
+            3: 1.2,
+            4: 1.5,
+            5: 1.8,
             6: 2,
         }
         self.font = pygame.font.SysFont(None, 40)
