@@ -12,6 +12,16 @@ from constants import *
 ## This is all a pretty standard pygame setup. Initalizing the window and a game clock.
 
 pygame.init()
+pygame.mixer.init()
+
+## Init sounds
+hitmarkerSound = pygame.mixer.Sound(f'assets/sounds/hitmarker.mp3')
+damageSound = pygame.mixer.Sound(f'assets/sounds/minecraft-damage.mp3')
+deathSound = pygame.mixer.Sound(f'assets/sounds/minecraft-death.mp3')
+explosionSound = pygame.mixer.Sound(f'assets/sounds/minecraft-explosion.mp3')
+
+backgroundMusic = pygame.mixer.music.load(f'assets/sounds/fortnite-corail.mp3')
+pygame.mixer.music.play(-1)
 
 screen = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SCALED, vsync=1)
 pygame.display.set_caption("FireBall Simulation")
@@ -28,6 +38,11 @@ help_text3 = font.render(
     True,
     "WHITE",
 )
+help_text3 = font.render(
+    "Press M to mute background music.",
+    True,
+    "WHITE",
+)
 big_font = pygame.font.SysFont(None, 32, bold=True)
 
 ##GAME VARIABLES
@@ -39,31 +54,6 @@ explosions = []
 dice = Dice(900, 25)
 current_level = 4
 won = False
-
-def draw_walls():
-    left = pygame.draw.line(
-        screen, "darkgreen", (0, 0), (0, WINDOW_HEIGHT), WALL_THICKNESS
-    )
-    right = pygame.draw.line(
-        screen,
-        "darkgreen",
-        (WINDOW_WIDTH, 0),
-        (WINDOW_WIDTH, WINDOW_HEIGHT),
-        WALL_THICKNESS,
-    )
-    top = pygame.draw.line(
-        screen, "darkgreen", (0, 0), (WINDOW_WIDTH, 0), WALL_THICKNESS
-    )
-    bottom = pygame.draw.line(
-        screen,
-        "darkgreen",
-        (0, WINDOW_HEIGHT),
-        (WINDOW_WIDTH, WINDOW_HEIGHT),
-        WALL_THICKNESS,
-    )
-    wall_list = [left, right, top, bottom]
-    return wall_list
-
 def draw_max_balls():
     pygame.draw.rect(screen, (20, 20, 20), (880, 15, 135, 105), border_radius=12)
     pygame.draw.rect(screen, (100, 100, 100), (880, 15, 135, 105), 2, border_radius=12)
@@ -117,8 +107,10 @@ lasso_fade_start = None
 
 ##MAIN GAME LOOP (runs 4ever)
 running = True
+mute = False
+countdown_counter, countdown_text = 10, '10'.rjust(3)
+pygame.time.set_timer(pygame.USEREVENT, 1000)
 while running:
-
     ##EVENT HANDLING
     for event in pygame.event.get():
         if (
@@ -126,6 +118,16 @@ while running:
         ):  ##basically if the user closes the window, stop running da game
             running = False
 
+        if event.type == pygame.USEREVENT: 
+            countdown_counter -= 1
+            countdown_text = str(countdown_counter).rjust(3) if countdown_counter > 0 else 'You Lose!!'
+            
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_m and mute == False:
+            pygame.mixer.music.set_volume(0.0)
+            mute = True
+        elif event.type == pygame.KEYDOWN and event.key == pygame.K_m and mute == True:
+            pygame.mixer.music.set_volume(1.0)
+            mute = False
         # Let user start drawing lasso
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             keys = pygame.key.get_pressed()
@@ -148,7 +150,7 @@ while running:
                         if point_in_polygon(ball.get_center(), lasso_points):
                             # Cause explosion if the ball gets lassoed
                             explosion = ExplosionEffect(
-                                ball.x_pos, ball.y_pos, ball.radius
+                                ball.x_pos, ball.y_pos, ball.radius, explosionSound
                             )
                             explosions.append(explosion)
 
@@ -175,7 +177,9 @@ while running:
                         y_pos=event.pos[1],
                         id=len(balls),
                         gravity=ball_gravity,
-                        max_level=current_level
+                        max_level=current_level,
+                        damageSound=damageSound,
+                        deathSound=deathSound
                     ))
         if (event.type == pygame.MOUSEBUTTONDOWN and not lasso_active and event.button == 3):  # Check for right mouse clicks
             for ball in balls:
@@ -225,11 +229,12 @@ while running:
             ash.bounds(WINDOW_WIDTH, WINDOW_HEIGHT, WALL_THICKNESS)
 
     # Random explosion
+    # These are kinda weird / unexpected -> turn in to meteorites?
     if random.randint(1, 4000//current_level) == 1:
         x = random.randint(WALL_THICKNESS + 10, WINDOW_WIDTH - WALL_THICKNESS - 10)
         y = random.randint(WALL_THICKNESS + 10, WINDOW_HEIGHT - WALL_THICKNESS - 10)
 
-        explosion = ExplosionEffect(x, y, random.randint(30, 50))
+        explosion = ExplosionEffect(x, y, random.randint(30, 50), explosionSound)
         explosions.append(explosion)
 
         explosion_knockback(x, y, balls, explosion.blast_radius)
@@ -242,8 +247,9 @@ while running:
     explosions = [explosion for explosion in explosions if not explosion.finished]
 
     ##RENDER ALL STUFF
-    screen.fill(BACKGROUND_COLOR)
-    draw_walls()
+    bg_img = pygame.image.load(f'assets/background/background.png')
+    screen.blit(bg_img, bg_img.get_rect())
+
     draw_max_balls()
     for ball in balls:
         ball.draw(screen)
@@ -282,7 +288,10 @@ while running:
     if won:
         win_text = big_font.render("You win!", True, "WHITE")
         screen.blit(win_text, win_text.get_rect(center=(WINDOW_WIDTH // 2, 100)))
-        
+
+    clock_text = big_font.render(countdown_text, True, "RED")
+    screen.blit(clock_text, clock_text.get_rect(center=(WINDOW_WIDTH // 2, 100)))
+
     pygame.display.flip()
     clock.tick(FPS)
 

@@ -42,7 +42,7 @@ ashes = [] #just like how the balls spawn
 
 
 class Ball:
-    def __init__(self, x_pos, y_pos, id, gravity, y_speed=0, x_speed=0, max_level=4):
+    def __init__(self, x_pos, y_pos, id, gravity, y_speed=0, x_speed=0, max_level=4, damageSound=None, deathSound=None):
         self.x_pos = x_pos
         self.y_pos = y_pos
         self.radius = random.randint(
@@ -68,6 +68,10 @@ class Ball:
         self.flame_temp = 400.0  # Temperature kept while flame is burning
         self.burn_level: float = 0.0
         self.active = True  # When this is set to false, the ball is removed from the simulation in main.py
+        self.damageSound = damageSound
+        self.deathSound = deathSound
+        self.damageSoundIsPlaying = False
+        self.deathSoundIsPlaying = False
 
     def draw(self, screen):
         # Glow on the objects based on temp
@@ -130,6 +134,8 @@ class Ball:
         if self.fire_effect.active:
             self.burn_level = self.burn_level + random.uniform(0.1,0.3)
         if self.burn_level >= max_burn_level:
+            if self.deathSound is not None:
+                self.deathSound.play()
             # ASHES nonsense here
             for dx in range(-int(self.radius), int(self.radius) + 1, 8):
                 for dy in range(-int(self.radius), int(self.radius) + 1, 8):
@@ -214,6 +220,9 @@ class Ball:
             self.temperature = max(ROOM_TEMP, self.temperature)
             
         if self.temperature >= self.ignition_temp:
+            ## This will only play damage sound for one ball, it avoids having a bunch of burning sounds playing all at once
+            if pygame.mixer.Channel(0).get_busy() == False:
+                self.damageSound.play()
             self.fire_effect.active = True
         else:
             self.temperature = ROOM_TEMP

@@ -1,12 +1,10 @@
-import random
 import pygame
 from particle import Particle
 from utils import load_spritesheet
 from constants import EXPLOSION_PATH
 
-
 class ExplosionEffect:
-    def __init__(self, ball_x, ball_y, ball_size):
+    def __init__(self, ball_x, ball_y, ball_size, explosionSound=None):
         self.ball_x = ball_x
         self.ball_y = ball_y
         self.ball_size = ball_size
@@ -22,8 +20,10 @@ class ExplosionEffect:
             self.ball_size * self.explosion_size_mult
         )  # Scale the explosion size
         self.blast_radius = self.explosion_size * 0.8
+        if explosionSound is not None:
+            explosionSound.play()
 
-    def update(self):
+    def update(self):    
         self.counter += 1
 
         # Update the current frame if the counter reached the explosion speed
