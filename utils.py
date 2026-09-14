@@ -15,7 +15,7 @@ def calc_mouse_vector(mouse_trajectory):
         )
     return x_speed, y_speed
 
-def handle_ball_collisions(balls):
+def handle_ball_collisions(balls, hitMarkerSound=None):
     for i in range(len(balls)):
         for j in range(i + 1, len(balls)):  ##check every pair of balls exactly once
             ball1 = balls[i]
@@ -27,6 +27,8 @@ def handle_ball_collisions(balls):
             if 0 < distance < ball1.radius + ball2.radius:  ##the balls are overlapping
                 if ball1.level == ball2.level and ball1.level < 37:
                     ##MERGE!
+                    if hitMarkerSound is not None:
+                        hitMarkerSound.play()
                     if ball1.radius > ball2.radius:
                         ball2.active = False
                         ball1.level += 1

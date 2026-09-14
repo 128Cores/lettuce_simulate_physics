@@ -70,8 +70,6 @@ class Ball:
         self.active = True  # When this is set to false, the ball is removed from the simulation in main.py
         self.damageSound = damageSound
         self.deathSound = deathSound
-        self.damageSoundIsPlaying = False
-        self.deathSoundIsPlaying = False
 
     def draw(self, screen):
         # Glow on the objects based on temp

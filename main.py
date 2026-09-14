@@ -43,6 +43,11 @@ help_text3 = font.render(
     True,
     "WHITE",
 )
+help_text4 = font.render(
+    "Hold G + left click and drag to attract balls to your mouse.",
+    True,
+    "WHITE",
+)
 big_font = pygame.font.SysFont(None, 32, bold=True)
 
 ##GAME VARIABLES
@@ -68,6 +73,17 @@ def draw_max_balls():
 
     text = big_font.render(str(max_ball.level), True, "WHITE")
     screen.blit(text, (990, 50))
+
+def draw_attraction_bar():
+    bar_x, bar_y, bar_width, bar_height = 880, 130, 135, 20
+
+    pygame.draw.rect(screen, (20, 20, 20), (bar_x, bar_y, bar_width, bar_height), border_radius=6)
+
+    fill_width = int(bar_width * (attraction_energy / 75))
+    if fill_width > 0:
+        pygame.draw.rect(screen, (40, 120, 255), (bar_x, bar_y, fill_width, bar_height), border_radius=6)
+
+    pygame.draw.rect(screen, (100, 100, 100), (bar_x, bar_y, bar_width, bar_height), 2, border_radius=6)
 
 # Calculating explosion forces
 def explosion_knockback(explosion_x, explosion_y, balls, blast_radius):
@@ -108,8 +124,16 @@ lasso_fade_start = None
 ##MAIN GAME LOOP (runs 4ever)
 running = True
 mute = False
-countdown_counter, countdown_text = 10, '10'.rjust(3)
+countdown_counter, countdown_text = 120, '120'.rjust(3)
 pygame.time.set_timer(pygame.USEREVENT, 1000)
+
+attraction_energy = 75
+
+def activate_attraction():
+    if pygame.mouse.get_pressed()[0] and pygame.key.get_pressed()[pygame.K_g] and attraction_energy > 0:
+        return True
+    return False
+
 while running:
     ##EVENT HANDLING
     for event in pygame.event.get():
@@ -121,6 +145,12 @@ while running:
         if event.type == pygame.USEREVENT: 
             countdown_counter -= 1
             countdown_text = str(countdown_counter).rjust(3) if countdown_counter > 0 else 'You Lose!!'
+
+            # Use the same one second timer for attraction energy
+            if activate_attraction():
+                attraction_energy -= 25
+            elif attraction_energy < 75:
+                attraction_energy += 10
             
         if event.type == pygame.KEYDOWN and event.key == pygame.K_m and mute == False:
             pygame.mixer.music.set_volume(0.0)
@@ -128,6 +158,7 @@ while running:
         elif event.type == pygame.KEYDOWN and event.key == pygame.K_m and mute == True:
             pygame.mixer.music.set_volume(1.0)
             mute = False
+
         # Let user start drawing lasso
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             keys = pygame.key.get_pressed()
@@ -138,6 +169,20 @@ while running:
 
         if event.type == pygame.MOUSEMOTION and lasso_active:
             lasso_points.append(event.pos)
+
+        mouse_pos = pygame.mouse.get_pos()
+        if activate_attraction():
+            for ball in balls:
+                tmp_ball_x = mouse_pos[0] - ball.x_pos
+                tmp_ball_y = mouse_pos[1] - ball.y_pos
+                tmp_ball_x *= 0.1
+                tmp_ball_y *= 0.1
+
+                ball.x_speed = 0 
+                ball.y_speed = 0 
+                ball.angular_speed = 0
+                ball.apply_forces(tmp_ball_x, tmp_ball_y);
+
 
         if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             if lasso_active:
@@ -218,7 +263,7 @@ while running:
         ash.update_position()
         ash.increase_burn()
 
-    handle_ball_collisions(balls)  ##this makes da balls bounce off eachother
+    handle_ball_collisions(balls, hitMarkerSound=hitmarkerSound)  ##this makes da balls bounce off eachother
     if any(ball.level >= 37 for ball in balls):
         won = True
     handle_ash_collisions(ashes)
@@ -251,6 +296,7 @@ while running:
     screen.blit(bg_img, bg_img.get_rect())
 
     draw_max_balls()
+    draw_attraction_bar()
     for ball in balls:
         ball.draw(screen)
     for ash in ashes:
@@ -260,6 +306,7 @@ while running:
     )  ##little instructions in the top left corner
     screen.blit(help_text2, (WALL_THICKNESS + 5, WALL_THICKNESS + 25))
     screen.blit(help_text3, (WALL_THICKNESS + 5, WALL_THICKNESS + 45))
+    screen.blit(help_text4, (WALL_THICKNESS + 5, WALL_THICKNESS + 65))
 
     if len(lasso_points) >= 2:
         alpha = 255
