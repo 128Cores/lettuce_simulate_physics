@@ -15,6 +15,7 @@ FPS = 60
 LASSO_FADE_TIME = 1000  # ms
 WALL_THICKNESS = 10
 BASE_FORCE = 10_000  # Force for explosion on other balls
+MAX_TRAIL = 30       # Ball trail max length
 
 
 # Heat

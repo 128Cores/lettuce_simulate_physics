@@ -281,6 +281,13 @@ while running:
         ball.update_position()
         ball.increase_burn()
 
+    # keep track of the trails for each ball
+    for ball in balls:
+        ball.trail.append((ball.x_pos, ball.y_pos))
+        # remove excess trail points
+        if len(ball.trail) > MAX_TRAIL:
+            ball.trail.pop(0)
+
     ashes[:] = [ash for ash in ashes if ash.active]
 
     for ash in ashes:
@@ -299,9 +306,6 @@ while running:
             ash.bounds(WINDOW_WIDTH, WINDOW_HEIGHT, WALL_THICKNESS)
 
     # Random explosion
-    # if (random.randint(1, 1000) > 100)
-
-
     # These are kinda weird / unexpected -> turn in to meteorites?
     if random.randint(1, 4000) < 30:
         x = random.randint(WALL_THICKNESS + 10, WINDOW_WIDTH - WALL_THICKNESS - 10)
@@ -325,10 +329,30 @@ while running:
 
     draw_max_balls()
     draw_attraction_bar()
+
     for ball in balls:
+        # generate random colors for the trail
+        random_r = random.randint(0,255)
+        random_g = random.randint(0,255)
+        random_b = random.randint(0,255)
+        trail_color = (random_r, random_g, random_b)
+        # ignore first position change
+        if len(ball.trail) >= 2:
+            # render trail
+            for i in range(1, len(ball.trail)):
+                min_width = 2
+                max_width = 6
+                # keep track of the progress of the trail
+                progress = i / (len(ball.trail) - 1)
+                # calculate width of the current trail point
+                width = max(1, int(min_width + progress * (max_width - min_width)))
+                # draw trail on screen
+                pygame.draw.line(screen, trail_color, ball.trail[i-1], ball.trail[i], width)
+        # render ball
         ball.draw(screen)
     for ash in ashes:
         ash.draw(screen)
+
     screen.blit(
         help_text, (WALL_THICKNESS + 5, WALL_THICKNESS + 5)
     )  ##little instructions in the top left corner

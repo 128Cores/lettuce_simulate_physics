@@ -70,6 +70,7 @@ class Ball:
         self.active = True  # When this is set to false, the ball is removed from the simulation in main.py
         self.damageSound = damageSound
         self.deathSound = deathSound
+        self.trail = [] # trail history array
 
     def draw(self, screen):
         # Glow on the objects based on temp
