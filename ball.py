@@ -59,8 +59,8 @@ class Ball:
         self.angle = 0 #for making the balls rotate
         self.angular_speed = 0 #because apparently rotation is super complicated
         self.gravity = gravity
-        self.y_speed = y_speed
-        self.x_speed = x_speed
+        self.y_speed = random.randint(-5, 5)
+        self.x_speed = random.randint(-5, 5)
         self.id = id
         self.fire_effect = FireEffect(self.x_pos, self.y_pos, self.radius)
         self.temperature = ROOM_TEMP  # Temperature is in °C
@@ -146,11 +146,29 @@ class Ball:
     def floor(self, WINDOW_HEIGHT, WALL_THICKNESS):
         return WINDOW_HEIGHT - self.radius - (WALL_THICKNESS / 2)
 
+    def ceiling(self, WINDOW_HEIGHT, WALL_THICKNESS):
+        return 0 + self.radius + (WALL_THICKNESS / 2)
+
     def bounds(self, WINDOW_WIDTH, WINDOW_HEIGHT, WALL_THICKNESS):
         floor_y = self.floor(WINDOW_HEIGHT, WALL_THICKNESS)
+        ceiling_y = self.ceiling(WINDOW_HEIGHT, WALL_THICKNESS)
         left_x = self.radius + WALL_THICKNESS / 2
         right_x = WINDOW_WIDTH - self.radius - WALL_THICKNESS / 2
 
+        # ceiling
+        if self.y_pos < ceiling_y:
+            self.y_pos = ceiling_y
+
+            self.angular_speed -= self.x_speed / self.radius
+
+            rebound = self.y_speed * self.retention - self.gravity
+
+            if rebound > bounce_stop:
+                self.y_speed = -rebound
+            else:
+                self.y_speed = 0
+
+        # floor
         if self.y_pos > floor_y:
             self.y_pos = floor_y
 

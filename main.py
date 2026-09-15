@@ -142,9 +142,10 @@ while running:
         ):  ##basically if the user closes the window, stop running da game
             running = False
 
-        if event.type == pygame.USEREVENT: 
-            countdown_counter -= 1
-            countdown_text = str(countdown_counter).rjust(3) if countdown_counter > 0 else 'You Lose!!'
+        if event.type == pygame.USEREVENT:
+            if not won:
+                countdown_counter -= 1
+                countdown_text = str(countdown_counter).rjust(3) if countdown_counter > 0 else 'You Lose!!'
 
             # Use the same one second timer for attraction energy
             if activate_attraction():
@@ -251,8 +252,32 @@ while running:
             #     I think it would break because the index you're on is no longer a thing
             balls.remove(ball)
 
+    # Add gravity interaction to each ball
+    for i, ball_1 in enumerate(balls):
+        acceleration_x = 0
+        acceleration_y = 0
+
+        for j, ball_2 in enumerate(balls):
+
+            # doesnt have gravity on itself
+            if i == j:
+                continue
+
+            # gravity formula
+            distance_x = (ball_2.x_pos - ball_1.x_pos)
+            distance_y = (ball_2.y_pos - ball_1.y_pos)
+            squared_distance = distance_x * distance_x + distance_y * distance_y
+            force = gravity * ball_2.mass / squared_distance
+
+            # get acceleration on each direction
+            acceleration_x += force * distance_x
+            acceleration_y += force * distance_y
+
+        # apply half of ball_2's force into ball_1 (to make the game not so easy, sorry!)
+        ball_1.apply_forces(acceleration_x / 2, acceleration_y / 2)
+
+    # update each ball after calculations
     for ball in balls:
-        ball.apply_gravity_and_velocity(WINDOW_HEIGHT, WALL_THICKNESS)
         ball.update_position()
         ball.increase_burn()
 
@@ -274,8 +299,11 @@ while running:
             ash.bounds(WINDOW_WIDTH, WINDOW_HEIGHT, WALL_THICKNESS)
 
     # Random explosion
+    # if (random.randint(1, 1000) > 100)
+
+
     # These are kinda weird / unexpected -> turn in to meteorites?
-    if random.randint(1, 4000//current_level) == 1:
+    if random.randint(1, 4000) < 30:
         x = random.randint(WALL_THICKNESS + 10, WINDOW_WIDTH - WALL_THICKNESS - 10)
         y = random.randint(WALL_THICKNESS + 10, WINDOW_HEIGHT - WALL_THICKNESS - 10)
 
@@ -335,9 +363,9 @@ while running:
     if won:
         win_text = big_font.render("You win!", True, "WHITE")
         screen.blit(win_text, win_text.get_rect(center=(WINDOW_WIDTH // 2, 100)))
-
-    clock_text = big_font.render(countdown_text, True, "RED")
-    screen.blit(clock_text, clock_text.get_rect(center=(WINDOW_WIDTH // 2, 100)))
+    else:
+        clock_text = big_font.render(countdown_text, True, "RED")
+        screen.blit(clock_text, clock_text.get_rect(center=(WINDOW_WIDTH // 2, 100)))
 
     pygame.display.flip()
     clock.tick(FPS)
