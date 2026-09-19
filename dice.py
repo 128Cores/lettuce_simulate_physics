@@ -6,7 +6,6 @@ import pygame
 
 # there's a die on screen that determines the gravity of the balls, higher roll, more gravity and vice versa
 
-
 class Dice:
     def __init__(self, x, y):
         self.x_pos = x

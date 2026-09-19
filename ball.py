@@ -48,7 +48,8 @@ class Ball:
         self.radius = random.randint(
             25, 45
         )  ##every ball gets random attributes when its spawned
-        self.level = int(random.uniform(max(1, max_level-4),max_level))
+        # self.level = int(random.uniform(max(1, max_level-4),max_level))
+        self.level = random.randint(1, max_level)
         self.image = make_circular_image(f'assets/balls/{self.level}.png', self.radius)
         self.density = random.uniform(0.5, 2)
         self.mass = int(
@@ -71,6 +72,12 @@ class Ball:
         self.damageSound = damageSound
         self.deathSound = deathSound
         self.trail = [] # trail history array
+        self.grabbed = False
+        self.prevGrabbedPos = (self.x_pos, self.y_pos)
+
+    def onClick(self):
+        self.update_temp()
+        self.grab()
 
     def draw(self, screen):
         # Glow on the objects based on temp
@@ -103,7 +110,7 @@ class Ball:
     def get_center(self):
         return (self.x_pos, self.y_pos)
 
-    def update_position(self):
+    def update_position(self, mouseX, mouseY):
         self.fire_effect.update_pos(self.x_pos, self.y_pos)
         self.fire_effect.update()
         #self.update_temp()
@@ -113,6 +120,9 @@ class Ball:
         self.x_pos += self.x_speed
         self.angle += self.angular_speed
         self.angular_speed *= 0.98
+
+        if (self.grabbed):
+            self.handleGrab(mouseX, mouseY)
 
     def update_image(self):
         self.image = make_circular_image(f'assets/balls/{self.level}.png', self.radius)
@@ -206,9 +216,9 @@ class Ball:
 
     # I made this because the other one both checks if it's being selected
     #        and selects it, but I just wanted to check if it was within the click
-    def check_if_selected(self, pos):
-        dx = pos[0] - self.x_pos
-        dy = pos[1] - self.y_pos
+    def check_if_selected(self, mouseX, mouseY):
+        dx = mouseX - self.x_pos
+        dy = mouseY - self.y_pos
         if dx**2 + dy**2 <= self.radius**2:
             return True
         return False
@@ -230,7 +240,7 @@ class Ball:
             self.temperature = ROOM_TEMP
             #self.burn_level = 0
             self.fire_effect.active = False
-
+        
     def update_fire(self):
         if self.temperature > ROOM_TEMP:
             self.temperature -= 0.1
@@ -245,3 +255,28 @@ class Ball:
             self.temperature = ROOM_TEMP
             #self.burn_level = 0
             self.fire_effect.active = False
+
+    # this lets you click and hold the ball to throw it around! 
+    def grab(self):
+        self.grabbed = True
+
+    def releaseGrab(self):
+        if (not self.grabbed):
+            return
+
+        diffX = self.x_pos - self.prevGrabbedPos[0]
+        diffY = self.y_pos - self.prevGrabbedPos[1]
+
+        self.apply_forces(diffX, diffY)
+        self.grabbed = False
+
+    def handleGrab(self, mouseX, mouseY):
+        self.prevGrabbedPos = (self.x_pos, self.y_pos)
+        self.setPosToMouse(mouseX, mouseY)
+        diffX = self.x_pos - self.prevGrabbedPos[0]
+        diffY = self.y_pos - self.prevGrabbedPos[1]
+        self.apply_forces(diffX, diffY)
+
+    def setPosToMouse(self, mouseX, mouseY):
+        self.x_pos = mouseX
+        self.y_pos = mouseY

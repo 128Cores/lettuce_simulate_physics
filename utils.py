@@ -48,7 +48,7 @@ def handle_ball_collisions(balls, hitMarkerSound=None):
                         ball2.radius = min(100, ball2.radius + math.log1p(ball1.radius))
                         ball2.update_image()
                     continue
-                
+
                 normal_x = x_dist / distance  ##direction pointing from ball1 to ball2
                 normal_y = y_dist / distance
                 overlap = (ball1.radius + ball2.radius) - distance

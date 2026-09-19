@@ -9,6 +9,19 @@ from dice import Dice
 from explosion_effect import ExplosionEffect
 from constants import *
 
+
+
+# todo: DELETE ME!! 
+'''
+1. balls are combining into each other right away (maybe increase level variance)
+2. balls are spawning too slowly (spawn multiple balls per frame when ballsPerClick is high)
+
+
+1. dragging a ball into another ball does not apply the correct force
+'''
+
+
+
 ## This is all a pretty standard pygame setup. Initalizing the window and a game clock.
 
 pygame.init()
@@ -28,26 +41,53 @@ pygame.display.set_caption("FireBall Simulation")
 
 clock = pygame.time.Clock()
 
+keyRepeatDelay = 500
+keyRepeatInterval = 80
+pygame.key.set_repeat(keyRepeatDelay, keyRepeatInterval)
+
 font = pygame.font.SysFont(None, 24)
 help_text = font.render(
-    "Click to spawn ball.", True, "WHITE"
+    "Press [LEFT CLICK] to spawn ball.", True, "WHITE"
 )
-help_text2 = font.render("Right click a ball to ignite it.", True, "WHITE")
+help_text2 = font.render("Press [RIGHT CLICK] to ignite a ball.", True, "WHITE")
 help_text3 = font.render(
-    "Hold shift while dragging mouse to lasso. Lasso around ball to make boom boom.",
-    True,
-    "WHITE",
-)
-help_text3 = font.render(
-    "Press M to mute background music.",
+    "Hold [SHIFT] while dragging mouse to lasso. Lasso around ball to make boom boom.",
     True,
     "WHITE",
 )
 help_text4 = font.render(
-    "Hold G + left click and drag to attract balls to your mouse.",
+    "Press [M] to mute background music.",
     True,
     "WHITE",
 )
+help_text5 = font.render(
+    "Hold [G + LEFT CLICK] and drag to attract balls to your mouse.",
+    True,
+    "WHITE",
+)
+
+numFramesToSpawnBalls = 0
+ballsToSpawnPerFrame = 0
+exactRemainingBalls = 0 
+ballsPerClick = 1
+ballsPerClickFont = pygame.font.SysFont(None, 64, bold=True)
+def updateBallsPerClickHelpText():
+    global ballsPerClickHelpText
+    ballsPerClickString = f"balls per click: {ballsPerClick}"
+    ballsPerClickHelpText = ballsPerClickFont.render(
+        ballsPerClickString,
+        True,
+        "GREEN"
+    )
+
+updateBallsPerClickHelpText()
+ballsPerClickPlusMinusFont = pygame.font.SysFont(None, 32, bold=True)
+ballsPerClickPlusMinusHelpText = ballsPerClickPlusMinusFont.render(
+    "(use + or -)",
+    True,
+    "GREEN"
+)
+
 big_font = pygame.font.SysFont(None, 32, bold=True)
 
 ##GAME VARIABLES
@@ -134,6 +174,72 @@ def activate_attraction():
         return True
     return False
 
+def onLeftClick(mouseX, mouseY):
+
+    global ballsToSpawnPerFrame
+    global numFramesToSpawnBalls
+    global exactRemainingBalls
+
+    for ball in balls:
+        if ball.check_if_selected(mouseX, mouseY):  # pass the position of the mouse over to the function
+            ball.onClick()
+            return
+
+    # WARNING: Don't try to understand this part. It doesn't make any sense!!
+
+    # still spawning current batch of balls
+    if (numFramesToSpawnBalls > 0):
+        return
+
+    ballSpawnRatio = (1/3)
+
+    assert(ballsPerClick >= 1, "make sure they can't go to 0 balls per click")
+    ballsToSpawn = ballsPerClick
+    numFramesToSpawnBalls = int(ballsToSpawn**(ballSpawnRatio))
+    ballsToSpawnPerFrame = int(ballsToSpawn / numFramesToSpawnBalls)
+
+    roundedTotal = numFramesToSpawnBalls * ballsToSpawnPerFrame
+
+    exactRemainingBalls = ballsToSpawn - roundedTotal
+
+def onLeftClickUp():
+
+    # Sorry 
+    for ball in balls:
+        ball.releaseGrab()
+
+def onRightClick(mouseX, mouseY):
+    for ball in balls:
+        if ball.check_if_selected(mouseX, mouseY):  # If ball clicked
+            ball.temperature = 400
+            ball.update_temp()
+
+def onPlusKeyPress():
+    global ballsPerClick
+
+    # unlimited cap on number of balls. DO NOT CHANGE <<<<< CRITICAL
+    ballsPerClick += 1
+    updateBallsPerClickHelpText()
+
+def onMinusKeyPress():
+    global ballsPerClick
+    if (ballsPerClick > 1):
+        ballsPerClick -= 1
+        updateBallsPerClickHelpText()
+
+def createBall(mouseX, mouseY):
+    dice.roll()
+    ball_gravity = dice.get_gravity()
+    balls.append(Ball(
+        x_pos=mouseX,
+        y_pos=mouseY,
+        id=len(balls),
+        gravity=ball_gravity,
+        max_level=current_level,
+        damageSound=damageSound,
+        deathSound=deathSound
+    ))
+
 while running:
     ##EVENT HANDLING
     for event in pygame.event.get():
@@ -141,6 +247,20 @@ while running:
             event.type == pygame.QUIT
         ):  ##basically if the user closes the window, stop running da game
             running = False
+
+        mouseX, mouseY = pygame.mouse.get_pos()
+    
+        if (numFramesToSpawnBalls > 0):
+
+            extraBalls = 0 
+            if (numFramesToSpawnBalls == 1):
+                extraBalls = exactRemainingBalls
+
+            for i in range(ballsToSpawnPerFrame + extraBalls):
+                createBall(mouseX, mouseY)
+
+            numFramesToSpawnBalls -= 1
+
 
         if event.type == pygame.USEREVENT:
             if not won:
@@ -171,21 +291,23 @@ while running:
         if event.type == pygame.MOUSEMOTION and lasso_active:
             lasso_points.append(event.pos)
 
-        mouse_pos = pygame.mouse.get_pos()
         if activate_attraction():
             for ball in balls:
-                tmp_ball_x = mouse_pos[0] - ball.x_pos
-                tmp_ball_y = mouse_pos[1] - ball.y_pos
+                tmp_ball_x = mouseX - ball.x_pos
+                tmp_ball_y = mouseY - ball.y_pos
                 tmp_ball_x *= 0.1
                 tmp_ball_y *= 0.1
 
                 ball.x_speed = 0 
                 ball.y_speed = 0 
                 ball.angular_speed = 0
-                ball.apply_forces(tmp_ball_x, tmp_ball_y);
+                ball.apply_forces(tmp_ball_x, tmp_ball_y)
 
 
         if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+
+            onLeftClickUp()
+
             if lasso_active:
                 lasso_active = False
                 lasso_fade_start = pygame.time.get_ticks()
@@ -206,36 +328,24 @@ while running:
 
                             ball.active = False
 
+        # # PLUS KEY 
+        if event.type == pygame.KEYDOWN and (event.key == pygame.K_PLUS or event.key == pygame.K_EQUALS):
+            onPlusKeyPress()
+
+        # # MINUS KEY
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_MINUS:
+            onMinusKeyPress()
+
+        # # LEFT CLICK
         if (event.type == pygame.MOUSEBUTTONDOWN and not lasso_active and event.button == 1):  ##check for left mouse clicks
-            active_selection = False
+            onLeftClick(event.pos[0], event.pos[1])
 
-            for ball in balls:
-                if ball.check_if_selected(event.pos):  # pass the position of the mouse over to the function
-                    ball.update_temp()
-                    active_selection = True
-
-            if not active_selection:  ##clicked an empty spot, spawn a fresh random ball there
-                dice.roll()
-
-                ball_gravity = dice.get_gravity()
-                balls.append(Ball(
-                        x_pos=event.pos[0],
-                        y_pos=event.pos[1],
-                        id=len(balls),
-                        gravity=ball_gravity,
-                        max_level=current_level,
-                        damageSound=damageSound,
-                        deathSound=deathSound
-                    ))
+        # # RIGHT CLICK
         if (event.type == pygame.MOUSEBUTTONDOWN and not lasso_active and event.button == 3):  # Check for right mouse clicks
-            for ball in balls:
-                if ball.check_if_selected(event.pos):  # If ball clicked
-                    ball.temperature = 400
-                    ball.update_temp()
+            onRightClick(event.pos[0], event.pos[1])
 
-    mouse_position = pygame.mouse.get_pos()  ## store mouse position
     mouse_trajectory.append(
-        mouse_position
+        (mouseX, mouseY)
     )  ##populating an array with the mouse's position this frame
     if (
         len(mouse_trajectory) > 20
@@ -267,7 +377,7 @@ while running:
             distance_x = (ball_2.x_pos - ball_1.x_pos)
             distance_y = (ball_2.y_pos - ball_1.y_pos)
             squared_distance = distance_x * distance_x + distance_y * distance_y
-            force = gravity * ball_2.mass / squared_distance
+            force = gravity * ball_2.mass / (squared_distance + 0.001)
 
             # get acceleration on each direction
             acceleration_x += force * distance_x
@@ -278,7 +388,7 @@ while running:
 
     # update each ball after calculations
     for ball in balls:
-        ball.update_position()
+        ball.update_position(mouseX, mouseY)
         ball.increase_burn()
 
     # keep track of the trails for each ball
@@ -359,6 +469,9 @@ while running:
     screen.blit(help_text2, (WALL_THICKNESS + 5, WALL_THICKNESS + 25))
     screen.blit(help_text3, (WALL_THICKNESS + 5, WALL_THICKNESS + 45))
     screen.blit(help_text4, (WALL_THICKNESS + 5, WALL_THICKNESS + 65))
+    screen.blit(help_text5, (WALL_THICKNESS + 5, WALL_THICKNESS + 85))
+    screen.blit(ballsPerClickHelpText, (WALL_THICKNESS + 5, WALL_THICKNESS + WINDOW_HEIGHT - 50))
+    screen.blit(ballsPerClickPlusMinusHelpText, (WALL_THICKNESS + 400, WALL_THICKNESS + WINDOW_HEIGHT - 40))
 
     if len(lasso_points) >= 2:
         alpha = 255
