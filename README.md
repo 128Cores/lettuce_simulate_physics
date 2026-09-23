@@ -1,15 +1,18 @@
 # physics_simulation
 
-A little pygame merge-sandbox with bouncy balls. Click anywhere empty to spawn a ball with random size, color, mass, bounciness, and friction. Balls will merge with balls of the same image to create bigger balls, and a higher level. 37 is the highest level. Balls bounce off the walls and off each other (mass-based elastic collisions, so heavy balls shove light ones around). Balls are gravitationally attracted to each other by the mass. The bigger the ball, the bigger the pull. Balls will turn into ashes after burning for long enough
+A little pygame merge-sandbox with bouncy balls. Click anywhere empty to spawn a ball with random size, color, mass, bounciness, and friction. Balls will merge with balls of the same image to create bigger balls, and a higher level. 38 is the highest level. Balls bounce off the walls and off each other (mass-based elastic collisions, so heavy balls shove light ones around). Balls are gravitationally attracted to each other by the mass. The bigger the ball, the bigger the pull. Balls will turn into ashes after burning for long enough
 Balls can also be set on fire, which can transfer to other balls based on their temperature (°C) and kinetic energy. Additionally balls can explode, which also transfers heat. (Both are based on mass & distance) To put out the fires, click rapidly on the ball before it burns up.
 
 ## Controls
 
-- **Left click empty space** — spawn a random ball
-- **Right click a ball** — set the ball on fire
-- **Left click a ball** — put the fire out
-- **Hold shift and drag** — draw lasso
-- **Draw lasso around ball** — make explosion
+- **Left click empty space:** spawn a random ball
+- **Right click a ball:** set the ball on fire
+- **Left click a ball:** cool it down; hold and drag to move it, then release to throw it
+- **Hold Shift and drag around a ball:** lasso it to cause an explosion
+- **Hold G and left click:** attract balls toward the mouse while energy lasts
+- **Press F:** switch between downward gravity and attraction between balls
+- **Press M:** toggle background music
+- **Press + or -:** increase or decrease balls spawned per click
 
 ## Setup
 

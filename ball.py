@@ -1,12 +1,11 @@
-import os
-import pygame
 import random
-import math
+
+import pygame
+
 from ash import Ash
+from constants import ROOM_TEMP
 from fire_effect import FireEffect
-from explosion_effect import ExplosionEffect
-from utils import calc_mouse_vector
-from constants import ROOM_TEMP, BALLS_DIR
+
 
 def make_circular_image(image_path, radius):
     size = radius * 2
@@ -28,7 +27,7 @@ bounce_stop = 0.3  ##this variable is used to check for really tiny bounces and 
 max_burn_level = (
     100.0  # This variable is maximum burn level before the ball is destroyed
 )
-ashes = [] #just like how the balls spawn
+ashes = []  # just like how the balls spawn
 
 # I wanted to add some sort of liquid or something that could extinguish
 #     the balls, but I'm not experienced in liquid simulations
@@ -36,13 +35,24 @@ ashes = [] #just like how the balls spawn
 # Setting fire_effect.active to false maintains the burn amount of this ball
 #        so it works if the ball is extinguished in some way and then ignited again
 
-# ^ I'm neither experienced, but I added temperature, which will decrease the heat if the 
+# ^ I'm neither experienced, but I added temperature, which will decrease the heat if the
 # ball is not burning yet. You can make the liquid (or whatever else) just decrease the
 # temperature. A ball is currently burning above 400°C and also not loosing heat at that temp.
 
 
 class Ball:
-    def __init__(self, x_pos, y_pos, id, gravity, y_speed=0, x_speed=0, max_level=4, damageSound=None, deathSound=None):
+    def __init__(
+        self,
+        x_pos,
+        y_pos,
+        id,
+        gravity,
+        y_speed=0,
+        x_speed=0,
+        max_level=4,
+        damageSound=None,
+        deathSound=None,
+    ):
         self.x_pos = x_pos
         self.y_pos = y_pos
         self.radius = random.randint(
@@ -50,15 +60,15 @@ class Ball:
         )  ##every ball gets random attributes when its spawned
         # self.level = int(random.uniform(max(1, max_level-4),max_level))
         self.level = random.randint(1, max_level)
-        self.image = make_circular_image(f'assets/balls/{self.level}.png', self.radius)
+        self.image = make_circular_image(f"assets/balls/{self.level}.png", self.radius)
         self.density = random.uniform(0.5, 2)
         self.mass = int(
             20 + self.radius * 4 * self.density
         )  # 50 - 500, but based on size and random density to feel more natural
         self.retention = random.uniform(0.7, 0.95)
         self.friction = random.uniform(0.05, 0.3)
-        self.angle = 0 #for making the balls rotate
-        self.angular_speed = 0 #because apparently rotation is super complicated
+        self.angle = 0  # for making the balls rotate
+        self.angular_speed = 0  # because apparently rotation is super complicated
         self.gravity = gravity
         self.y_speed = random.randint(-5, 5)
         self.x_speed = random.randint(-5, 5)
@@ -71,9 +81,11 @@ class Ball:
         self.active = True  # When this is set to false, the ball is removed from the simulation in main.py
         self.damageSound = damageSound
         self.deathSound = deathSound
-        self.trail = [] # trail history array
+        self.trail = []  # trail history array
         self.grabbed = False
         self.prevGrabbedPos = (self.x_pos, self.y_pos)
+        self.scored = False
+        self.shot_frames = 0
 
     def onClick(self):
         self.update_temp()
@@ -113,7 +125,7 @@ class Ball:
     def update_position(self, mouseX, mouseY):
         self.fire_effect.update_pos(self.x_pos, self.y_pos)
         self.fire_effect.update()
-        #self.update_temp()
+        # self.update_temp()
         self.update_fire()
 
         self.y_pos += self.y_speed
@@ -121,17 +133,22 @@ class Ball:
         self.angle += self.angular_speed
         self.angular_speed *= 0.98
 
-        if (self.grabbed):
+        if self.grabbed:
             self.handleGrab(mouseX, mouseY)
 
     def update_image(self):
-        self.image = make_circular_image(f'assets/balls/{self.level}.png', self.radius)
+        i = "basketball" if self.scored else self.level
+        self.image = make_circular_image(f"assets/balls/{i}.png", self.radius)
 
     def apply_gravity_and_velocity(self, WINDOW_HEIGHT, WALL_THICKNESS):
-        if self.y_pos < self.floor(WINDOW_HEIGHT, WALL_THICKNESS):  ## if the ball's y position is less than the bottom of the screen pretty much
+        if (
+            self.y_pos < self.floor(WINDOW_HEIGHT, WALL_THICKNESS)
+        ):  ## if the ball's y position is less than the bottom of the screen pretty much
             self.y_speed += self.gravity
 
-        if (self.y_speed == 0 and self.x_speed != 0):  ## ball is rolling along the ground, slow it down
+        if (
+            self.y_speed == 0 and self.x_speed != 0
+        ):  ## ball is rolling along the ground, slow it down
             if self.x_speed > 0:
                 self.x_speed -= self.friction
             else:
@@ -141,17 +158,29 @@ class Ball:
 
     def increase_burn(self):
         if self.fire_effect.active:
-            self.burn_level = self.burn_level + random.uniform(0.1,0.3)
+            self.burn_level = self.burn_level + random.uniform(0.1, 0.3)
         if self.burn_level >= max_burn_level:
             if self.deathSound is not None:
                 self.deathSound.play()
             # ASHES nonsense here
             for dx in range(-int(self.radius), int(self.radius) + 1, 8):
                 for dy in range(-int(self.radius), int(self.radius) + 1, 8):
-                    if dx*dx + dy*dy <= self.radius * self.radius: ##literally span then inside the entire ball circle
-                        ashes.append(Ash(x_pos=self.x_pos + dx, y_pos=self.y_pos + dy, id=len(ashes), gravity=self.gravity,
-                                         x_speed=self.x_speed + random.uniform(-1, 1), #give the ashes left/right motion
-                                         y_speed=self.y_speed + random.uniform(-1, 0))) #screw it, also up/down random
+                    if (
+                        dx * dx + dy * dy <= self.radius * self.radius
+                    ):  ##literally span then inside the entire ball circle
+                        ashes.append(
+                            Ash(
+                                x_pos=self.x_pos + dx,
+                                y_pos=self.y_pos + dy,
+                                id=len(ashes),
+                                gravity=self.gravity,
+                                x_speed=self.x_speed
+                                + random.uniform(
+                                    -1, 1
+                                ),  # give the ashes left/right motion
+                                y_speed=self.y_speed + random.uniform(-1, 0),
+                            )
+                        )  # screw it, also up/down random
             self.active = False
 
     def floor(self, WINDOW_HEIGHT, WALL_THICKNESS):
@@ -185,7 +214,9 @@ class Ball:
 
             self.angular_speed += self.x_speed / self.radius
 
-            rebound = self.y_speed * self.retention - self.gravity ## minus one frame of gravity, else the floor snap-up feeds balls energy and they bounce forever
+            rebound = (
+                self.y_speed * self.retention - self.gravity
+            )  ## minus one frame of gravity, else the floor snap-up feeds balls energy and they bounce forever
 
             if rebound > bounce_stop:
                 self.y_speed = -rebound
@@ -219,9 +250,7 @@ class Ball:
     def check_if_selected(self, mouseX, mouseY):
         dx = mouseX - self.x_pos
         dy = mouseY - self.y_pos
-        if dx**2 + dy**2 <= self.radius**2:
-            return True
-        return False
+        return dx**2 + dy**2 <= self.radius**2
 
     # Apply additional forces to the balls (for explosion)
     def apply_forces(self, force_x, force_y):
@@ -238,14 +267,14 @@ class Ball:
             self.fire_effect.active = True
         else:
             self.temperature = ROOM_TEMP
-            #self.burn_level = 0
+            # self.burn_level = 0
             self.fire_effect.active = False
-        
+
     def update_fire(self):
         if self.temperature > ROOM_TEMP:
             self.temperature -= 0.1
             self.temperature = max(ROOM_TEMP, self.temperature)
-            
+
         if self.temperature >= self.ignition_temp:
             ## This will only play damage sound for one ball, it avoids having a bunch of burning sounds playing all at once
             if pygame.mixer.Channel(0).get_busy() == False:
@@ -253,15 +282,15 @@ class Ball:
             self.fire_effect.active = True
         else:
             self.temperature = ROOM_TEMP
-            #self.burn_level = 0
+            # self.burn_level = 0
             self.fire_effect.active = False
 
-    # this lets you click and hold the ball to throw it around! 
+    # this lets you click and hold the ball to throw it around!
     def grab(self):
         self.grabbed = True
 
     def releaseGrab(self):
-        if (not self.grabbed):
+        if not self.grabbed:
             return
 
         diffX = self.x_pos - self.prevGrabbedPos[0]
@@ -269,6 +298,8 @@ class Ball:
 
         self.apply_forces(diffX, diffY)
         self.grabbed = False
+
+        self.shot_frames = 120
 
     def handleGrab(self, mouseX, mouseY):
         self.prevGrabbedPos = (self.x_pos, self.y_pos)

@@ -1,5 +1,7 @@
 import math
+
 import pygame
+
 from constants import BASE_CONDUCT_MULT, IMPACT_HEAT_MULT
 
 
@@ -15,25 +17,25 @@ def calc_mouse_vector(mouse_trajectory):
         )
     return x_speed, y_speed
 
+
 def handle_ball_collisions(balls, hitMarkerSound=None):
     for i in range(len(balls)):
         for j in range(i + 1, len(balls)):  ##check every pair of balls exactly once
             ball1 = balls[i]
             ball2 = balls[j]
-            
+
             x_dist = ball2.x_pos - ball1.x_pos
             y_dist = ball2.y_pos - ball1.y_pos
             distance = math.sqrt(x_dist**2 + y_dist**2)
             if 0 < distance < ball1.radius + ball2.radius:  ##the balls are overlapping
-                if ball1.level == ball2.level and ball1.level < 37:
+                if ball1.level == ball2.level and ball1.level < 38:
                     ##MERGE!
                     if hitMarkerSound is not None:
                         hitMarkerSound.play()
                     if ball1.radius > ball2.radius:
                         ball2.active = False
                         ball1.level += 1
-                        if ball1.level > 37:
-                            ball1.level = 37
+                        ball1.level = min(ball1.level, 38)
                         ball1.temperature += ball2.temperature
                         ball1.temperature *= 0.75
                         ball1.radius = min(100, ball1.radius + math.log1p(ball2.radius))
@@ -41,8 +43,7 @@ def handle_ball_collisions(balls, hitMarkerSound=None):
                     else:
                         ball1.active = False
                         ball2.level += 1
-                        if ball2.level > 37:
-                            ball2.level = 37
+                        ball2.level = min(ball2.level, 38)
                         ball2.temperature += ball1.temperature
                         ball2.temperature *= 0.75
                         ball2.radius = min(100, ball2.radius + math.log1p(ball1.radius))
@@ -60,17 +61,23 @@ def handle_ball_collisions(balls, hitMarkerSound=None):
                 ball2.y_pos += normal_y * overlap / 2
 
                 ##elastic collision, heavier balls shove lighter balls around more
-                rel_speed = (ball1.x_speed - ball2.x_speed) * normal_x + (ball1.y_speed - ball2.y_speed) * normal_y
-                tan_speed = (ball1.x_speed - ball2.x_speed) * -normal_y + (ball1.y_speed - ball2.y_speed) * normal_x
+                rel_speed = (ball1.x_speed - ball2.x_speed) * normal_x + (
+                    ball1.y_speed - ball2.y_speed
+                ) * normal_y
+                tan_speed = (ball1.x_speed - ball2.x_speed) * -normal_y + (
+                    ball1.y_speed - ball2.y_speed
+                ) * normal_x
 
                 ball1.angular_speed += tan_speed / ball1.radius * 0.5
                 ball2.angular_speed -= tan_speed / ball2.radius * 0.5
 
-                if rel_speed > 0:  ##only bounce if the balls are actually moving towards eachother
+                if (
+                    rel_speed > 0
+                ):  ##only bounce if the balls are actually moving towards eachother
                     impulse = 2 * rel_speed / (ball1.mass + ball2.mass)
                     ball1.x_speed -= impulse * ball2.mass * normal_x
                     ball1.y_speed -= impulse * ball2.mass * normal_y
-                
+
                     ball2.x_speed += impulse * ball1.mass * normal_x
                     ball2.y_speed += impulse * ball1.mass * normal_y
 
@@ -94,31 +101,38 @@ def handle_ball_collisions(balls, hitMarkerSound=None):
 
                 # Transfer the heat based on the temp, conductivity, impact heat and ball mass
                 if temp_diff > 0:  # Ball 1 is hotter
-                    ball2.temperature += (temp_diff * conductivity + impact_heat) / (ball2.mass) * 10
+                    ball2.temperature += (
+                        (temp_diff * conductivity + impact_heat) / (ball2.mass) * 10
+                    )
 
                 if temp_diff < 0:  # Ball 2 is hotter
-                    ball1.temperature += (abs(temp_diff) * conductivity + impact_heat) / (ball1.mass) * 10
+                    ball1.temperature += (
+                        (abs(temp_diff) * conductivity + impact_heat)
+                        / (ball1.mass)
+                        * 10
+                    )
 
-                #adding no temp difference, impact friction heat increase
+                # adding no temp difference, impact friction heat increase
                 if temp_diff == 0:
                     ball1.temperature += impact_heat / (ball1.mass) * 10
                     ball2.temperature += impact_heat / (ball2.mass) * 10
 
+
 def handle_ash_collisions(ashes, cell_size=1):
-    #do a grid-based collision, more like sand than balls
+    # do a grid-based collision, more like sand than balls
     grid = {}
 
     for ash in ashes:
         cell_x = int(ash.x_pos // cell_size)
         cell_y = int(ash.y_pos // cell_size)
-        grid.setdefault((cell_x, cell_y), []).append(ash) #put them in grid cells
+        grid.setdefault((cell_x, cell_y), []).append(ash)  # put them in grid cells
 
     for ash in ashes:
         cell_x = int(ash.x_pos // cell_size)
         cell_y = int(ash.y_pos // cell_size)
         for offset_x in (-1, 0, 1):
-            for offset_y in (-1, 0, 1): #go through grid cells and do collisions
-                nearby = grid.get((cell_x + offset_x, cell_y+offset_y), [])
+            for offset_y in (-1, 0, 1):  # go through grid cells and do collisions
+                nearby = grid.get((cell_x + offset_x, cell_y + offset_y), [])
                 for other in nearby:
                     if other is ash:
                         continue
@@ -127,7 +141,7 @@ def handle_ash_collisions(ashes, cell_size=1):
                     d2 = dx * dx + dy * dy
                     min_d = ash.radius + other.radius
 
-                    if d2 > 0 and d2 < min_d*min_d:
+                    if d2 > 0 and d2 < min_d * min_d:
                         d = math.sqrt(d2)
                         norm_x = dx / d
                         norm_y = dy / d
@@ -138,7 +152,7 @@ def handle_ash_collisions(ashes, cell_size=1):
                         other.y_pos += norm_y * overlap / 2
                         vel_x = other.x_speed - ash.x_speed
                         vel_y = other.y_speed - ash.y_speed
-                        norm_v = (vel_x * norm_x + vel_y * norm_y)
+                        norm_v = vel_x * norm_x + vel_y * norm_y
                         if norm_v > 0:
                             continue
 
@@ -149,6 +163,7 @@ def handle_ash_collisions(ashes, cell_size=1):
                         ash.y_speed -= pow_y
                         other.x_speed += pow_x
                         other.y_speed += pow_y
+
 
 def point_in_polygon(point, polygon):
     x, y = point
