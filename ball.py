@@ -29,17 +29,6 @@ max_burn_level = (
 )
 ashes = []  # just like how the balls spawn
 
-# I wanted to add some sort of liquid or something that could extinguish
-#     the balls, but I'm not experienced in liquid simulations
-# If someone after me could, that might be a cool idea! (or some other extinguish method)
-# Setting fire_effect.active to false maintains the burn amount of this ball
-#        so it works if the ball is extinguished in some way and then ignited again
-
-# ^ I'm neither experienced, but I added temperature, which will decrease the heat if the
-# ball is not burning yet. You can make the liquid (or whatever else) just decrease the
-# temperature. A ball is currently burning above 400°C and also not loosing heat at that temp.
-
-
 class Ball:
     def __init__(
         self,
@@ -256,6 +245,12 @@ class Ball:
     def apply_forces(self, force_x, force_y):
         self.x_speed += force_x
         self.y_speed += force_y
+
+    def cool(self, amount):
+        self.temperature = max(ROOM_TEMP, self.temperature - amount)
+        if self.temperature < self.ignition_temp:
+            self.fire_effect.active = False
+            self.fire_effect.particles.clear()
 
     def update_temp(self):
         # Cool down if the temp is above room temp

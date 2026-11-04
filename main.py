@@ -1,4 +1,6 @@
 import math
+import json
+from pathlib import Path
 import random
 import sys
 
@@ -30,6 +32,8 @@ hitmarkerSound = pygame.mixer.Sound(f"assets/sounds/hitmarker.mp3")
 damageSound = pygame.mixer.Sound(f"assets/sounds/minecraft-damage.mp3")
 deathSound = pygame.mixer.Sound(f"assets/sounds/minecraft-death.mp3")
 explosionSound = pygame.mixer.Sound(f"assets/sounds/minecraft-explosion.mp3")
+water_sound = pygame.mixer.Sound("assets/sounds/water-splash.mp3")
+water_sound.set_volume(0.6)
 
 backgroundMusic = pygame.mixer.music.load(f"assets/sounds/fortnite-corail.mp3")
 # backgroundMusic = pygame.mixer.music.load(f"assets/sounds/monkey.mp3")
@@ -45,30 +49,26 @@ keyRepeatInterval = 80
 pygame.key.set_repeat(keyRepeatDelay, keyRepeatInterval)
 
 font = pygame.font.SysFont(None, 24)
-help_text = font.render("Press [LEFT CLICK] to spawn ball.", True, "WHITE")
-help_text2 = font.render("Press [RIGHT CLICK] to ignite a ball.", True, "WHITE")
-help_text3 = font.render(
-    "Hold [SHIFT] while dragging mouse to lasso. Lasso around ball to make boom boom.",
-    True,
-    "WHITE",
-)
-help_text4 = font.render(
-    "Press [M] to mute background music.",
-    True,
-    "WHITE",
-)
-help_text5 = font.render(
-    "Hold [G + LEFT CLICK] and drag to attract balls to your mouse.",
-    True,
-    "WHITE",
-)
-gravity_text = font.render("Press [F] to toggle gravity.", True, "WHITE")
+show_hints = True
+trails_enabled = True
+water_drops = []
+background_image = pygame.image.load("assets/background/background.png")
+hint_lines = [
+    "Left click: spawn / grab a ball; release to throw",
+    "Right click: ignite a ball",
+    "Shift + left drag: lasso balls to explode",
+    "Hold G: attract balls (uses blue energy bar)",
+    "W: to splash a bucket of cooling water.",
+    "R: restart from round 1",
+    "T: toggle trails    F: switch gravity    M: mute music",
+    "+ / -: balls per click    H: hide / show these hints",
+]
 
 numFramesToSpawnBalls = 0
 ballsToSpawnPerFrame = 0
 exactRemainingBalls = 0
 ballsPerClick = 1
-ballsPerClickFont = pygame.font.SysFont(None, 64, bold=True)
+ballsPerClickFont = pygame.font.SysFont(None, 28, bold=True)
 
 
 def updateBallsPerClickHelpText():
@@ -78,12 +78,14 @@ def updateBallsPerClickHelpText():
 
 
 updateBallsPerClickHelpText()
-ballsPerClickPlusMinusFont = pygame.font.SysFont(None, 32, bold=True)
+ballsPerClickPlusMinusFont = pygame.font.SysFont(None, 24)
 ballsPerClickPlusMinusHelpText = ballsPerClickPlusMinusFont.render(
     "(use + or -)", True, "GREEN"
 )
 
 big_font = pygame.font.SysFont(None, 32, bold=True)
+objective_font = pygame.font.SysFont(None, 38, bold=True)
+timer_font = pygame.font.SysFont(None, 48, bold=True)
 
 ##GAME VARIABLES
 gravity = 0.6
@@ -94,6 +96,7 @@ explosions = []
 dice = Dice(900, 25)
 current_level = 4
 won = False
+lost = False
 gravity_enabled = True
 
 HOOP_LEFT = 335
@@ -112,10 +115,10 @@ def draw_max_balls():
     max_ball = max(balls, key=lambda ball: ball.level)
     current_level = max(4, max_ball.level)
     image = pygame.transform.scale(max_ball.image, (80, 80))
-    screen.blit(image, (900, 25))
+    screen.blit(image, (888, 25))
 
     text = big_font.render(str(max_ball.level), True, "WHITE")
-    screen.blit(text, (990, 50))
+    screen.blit(text, text.get_rect(midright=(1007, 65)))
 
 
 def draw_attraction_bar():
@@ -183,16 +186,76 @@ lasso_fade_start = None
 ##MAIN GAME LOOP (runs 4ever)
 running = True
 mute = False
-countdown_counter, countdown_text = 120, "120".rjust(3)
-pygame.time.set_timer(pygame.USEREVENT, 1000)
-
+score_path = Path(__file__).with_name("high_score.json")
+try:
+    high_score = max(0, int(json.loads(score_path.read_text())["high_score"]))
+except (OSError, ValueError, KeyError, TypeError):
+    high_score = 0
+score = 0
+round_number = 1
+transition_at = None
 attraction_energy = 75
+
+
+def start_round(number):
+    global round_number, round_deadline, countdown_counter, won, lost, transition_at
+    global current_level, attraction_energy, numFramesToSpawnBalls, exactRemainingBalls
+    global ballsToSpawnPerFrame, lasso_active, lasso_fade_start
+    round_number = number
+    duration = 30 + 90 / (1 + 0.15 * (number - 1))
+    round_deadline = pygame.time.get_ticks() + duration * 1000
+    countdown_counter = math.ceil(duration)
+    won = lost = False
+    transition_at = None
+    balls.clear()
+    ashes.clear()
+    explosions.clear()
+    water_drops.clear()
+    mouse_trajectory.clear()
+    lasso_points.clear()
+    lasso_active = False
+    lasso_fade_start = None
+    current_level = 4
+    attraction_energy = 75
+    numFramesToSpawnBalls = ballsToSpawnPerFrame = exactRemainingBalls = 0
+    pygame.time.set_timer(pygame.USEREVENT, 1000)
+
+
+def save_high_score():
+    global high_score
+    if score > high_score:
+        high_score = score
+        try:
+            score_path.write_text(json.dumps({"high_score": high_score}))
+        except OSError as error:
+            print(f"Could not save high score: {error}")
+
+
+def splash_water(x, y):
+    if won or lost:
+        return
+    water_sound.play()
+    # A wide burst with sideways momentum, rather than a continuous stream.
+    for _ in range(60):
+        water_drops.append([x + random.uniform(-24, 24), y + random.uniform(-12, 12),
+                            random.uniform(-6, 6), random.uniform(-4, 5), 0])
+
+
+def outlined_text(text, text_font, center, color="WHITE", *, top_left=False):
+    image = text_font.render(text, True, color)
+    outline = text_font.render(text, True, (10, 12, 18))
+    rect = image.get_rect(topleft=center) if top_left else image.get_rect(center=center)
+    for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2), (-2, -2), (2, 2), (-2, 2), (2, -2)):
+        screen.blit(outline, rect.move(dx, dy))
+    screen.blit(image, rect)
+
+
+start_round(1)
 
 
 def activate_attraction():
     return bool(
-        pygame.mouse.get_pressed()[0]
-        and pygame.key.get_pressed()[pygame.K_g]
+        pygame.key.get_pressed()[pygame.K_g]
         and attraction_energy > 0
     )
 
@@ -273,6 +336,7 @@ def createBall(mouseX, mouseY):
 
 
 while running:
+    mouseX, mouseY = pygame.mouse.get_pos()
     ##EVENT HANDLING
     for event in pygame.event.get():
         if (
@@ -282,30 +346,12 @@ while running:
 
         mouseX, mouseY = pygame.mouse.get_pos()
 
-        if numFramesToSpawnBalls > 0:
-            extraBalls = 0
-            if numFramesToSpawnBalls == 1:
-                extraBalls = exactRemainingBalls
-
-            for i in range(ballsToSpawnPerFrame + extraBalls):
-                createBall(mouseX, mouseY)
-
-            numFramesToSpawnBalls -= 1
-
         if event.type == pygame.USEREVENT:
-            if not won:
-                countdown_counter -= 1
-                countdown_text = (
-                    str(countdown_counter).rjust(3)
-                    if countdown_counter > 0
-                    else "You Lose!!"
-                )
-
             # Use the same one second timer for attraction energy
             if activate_attraction():
-                attraction_energy -= 25
+                attraction_energy = max(0, attraction_energy - 25)
             elif attraction_energy < 75:
-                attraction_energy += 10
+                attraction_energy = min(75, attraction_energy + 10)
 
         if event.type == pygame.KEYDOWN and event.key == pygame.K_m and mute == False:
             pygame.mixer.music.set_volume(0.0)
@@ -313,6 +359,23 @@ while running:
         elif event.type == pygame.KEYDOWN and event.key == pygame.K_m and mute == True:
             pygame.mixer.music.set_volume(1.0)
             mute = False
+
+        if event.type == pygame.KEYDOWN and not getattr(event, "repeat", False):
+            if event.key == pygame.K_r:
+                score = 0
+                start_round(1)
+                continue
+            if event.key == pygame.K_h:
+                show_hints = not show_hints
+            elif event.key == pygame.K_t:
+                trails_enabled = not trails_enabled
+                for ball in balls:
+                    ball.trail.clear()
+            elif event.key == pygame.K_w:
+                splash_water(mouseX, mouseY)
+
+        if won or lost:
+            continue
 
         # Let user start drawing lasso
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -324,18 +387,6 @@ while running:
 
         if event.type == pygame.MOUSEMOTION and lasso_active:
             lasso_points.append(event.pos)
-
-        if activate_attraction():
-            for ball in balls:
-                tmp_ball_x = mouseX - ball.x_pos
-                tmp_ball_y = mouseY - ball.y_pos
-                tmp_ball_x *= 0.1
-                tmp_ball_y *= 0.1
-
-                ball.x_speed = 0
-                ball.y_speed = 0
-                ball.angular_speed = 0
-                ball.apply_forces(tmp_ball_x, tmp_ball_y)
 
         if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
             onLeftClickUp()
@@ -376,7 +427,8 @@ while running:
             and not lasso_active
             and event.button == 1
         ):  ##check for left mouse clicks
-            onLeftClick(event.pos[0], event.pos[1])
+            if not pygame.key.get_pressed()[pygame.K_g] and not pygame.key.get_pressed()[pygame.K_w]:
+                onLeftClick(event.pos[0], event.pos[1])
 
         # # RIGHT CLICK
         if (
@@ -388,6 +440,50 @@ while running:
 
         if event.type == pygame.KEYDOWN and event.key == pygame.K_f:
             gravity_enabled = not gravity_enabled
+
+    now = pygame.time.get_ticks()
+    if transition_at is not None and now >= transition_at:
+        if won:
+            start_round(round_number + 1)
+        else:
+            score = 0
+            start_round(1)
+    if not won and not lost:
+        countdown_counter = max(0, math.ceil((round_deadline - now) / 1000))
+        if now >= round_deadline:
+            lost = True
+            transition_at = now + 3000
+            numFramesToSpawnBalls = 0
+            for ball in balls:
+                ball.grabbed = False
+
+    if not won and not lost and numFramesToSpawnBalls > 0:
+        extra = exactRemainingBalls if numFramesToSpawnBalls == 1 else 0
+        for _ in range(ballsToSpawnPerFrame + extra):
+            createBall(mouseX, mouseY)
+        numFramesToSpawnBalls -= 1
+
+    if not won and not lost and activate_attraction():
+        for ball in balls:
+            ball.grabbed = False
+            ball.x_speed = (mouseX - ball.x_pos) * 0.1
+            ball.y_speed = (mouseY - ball.y_pos) * 0.1
+            ball.angular_speed = 0
+
+    remaining_drops = []
+    for drop in water_drops:
+        drop[3] += 0.3
+        drop[0] += drop[2]
+        drop[1] += drop[3]
+        drop[4] += 1
+        for ball in balls:
+            if ball.active and ball.check_if_selected(drop[0], drop[1]):
+                ball.cool(15)
+                break
+        else:
+            if 0 < drop[0] < WINDOW_WIDTH and drop[1] < WINDOW_HEIGHT - WALL_THICKNESS and drop[4] < 120:
+                remaining_drops.append(drop)
+    water_drops = remaining_drops
 
     mouse_trajectory.append(
         (mouseX, mouseY)
@@ -452,7 +548,8 @@ while running:
 
     # keep track of the trails for each ball
     for ball in balls:
-        ball.trail.append((ball.x_pos, ball.y_pos))
+        if trails_enabled:
+            ball.trail.append((ball.x_pos, ball.y_pos))
         # remove excess trail points
         if len(ball.trail) > MAX_TRAIL:
             ball.trail.pop(0)
@@ -467,8 +564,14 @@ while running:
     handle_ball_collisions(
         balls, hitMarkerSound=hitmarkerSound
     )  ##this makes da balls bounce off eachother
-    if any(ball.level >= 38 for ball in balls):
+    if not won and not lost and any(ball.active and ball.level >= 38 for ball in balls):
         won = True
+        transition_at = pygame.time.get_ticks() + 10000
+        score += 1000 + countdown_counter * 10
+        save_high_score()
+        numFramesToSpawnBalls = 0
+        for ball in balls:
+            ball.grabbed = False
     handle_ash_collisions(ashes)
 
     for ball in balls:
@@ -495,20 +598,12 @@ while running:
     explosions = [explosion for explosion in explosions if not explosion.finished]
 
     ##RENDER ALL STUFF
-    bg_img = pygame.image.load("assets/background/background.png")
-    screen.blit(bg_img, bg_img.get_rect())
-
-    draw_max_balls()
-    draw_attraction_bar()
+    screen.blit(background_image, background_image.get_rect())
 
     for ball in balls:
-        # generate random colors for the trail
-        random_r = random.randint(0, 255)
-        random_g = random.randint(0, 255)
-        random_b = random.randint(0, 255)
-        trail_color = (random_r, random_g, random_b)
+        trail_color = tuple(random.randint(0, 255) for _ in range(3))
         # ignore first position change
-        if len(ball.trail) >= 2:
+        if trails_enabled and len(ball.trail) >= 2:
             # render trail
             for i in range(1, len(ball.trail)):
                 min_width = 2
@@ -526,21 +621,8 @@ while running:
     for ash in ashes:
         ash.draw(screen)
 
-    screen.blit(
-        help_text, (WALL_THICKNESS + 5, WALL_THICKNESS + 5)
-    )  ##little instructions in the top left corner
-    screen.blit(help_text2, (WALL_THICKNESS + 5, WALL_THICKNESS + 25))
-    screen.blit(help_text3, (WALL_THICKNESS + 5, WALL_THICKNESS + 45))
-    screen.blit(help_text4, (WALL_THICKNESS + 5, WALL_THICKNESS + 65))
-    screen.blit(help_text5, (WALL_THICKNESS + 5, WALL_THICKNESS + 85))
-    screen.blit(gravity_text, (WALL_THICKNESS + 5, WALL_THICKNESS + 155))
-    screen.blit(
-        ballsPerClickHelpText, (WALL_THICKNESS + 5, WALL_THICKNESS + WINDOW_HEIGHT - 50)
-    )
-    screen.blit(
-        ballsPerClickPlusMinusHelpText,
-        (WALL_THICKNESS + 600, WALL_THICKNESS + WINDOW_HEIGHT - 40),
-    )
+    for drop in water_drops:
+        pygame.draw.line(screen, (90, 185, 230), (drop[0], drop[1] - 5), (drop[0], drop[1]), 2)
 
     if len(lasso_points) >= 2:
         alpha = 255
@@ -566,12 +648,31 @@ while running:
     for explosion in explosions:
         explosion.draw(screen)
 
+    # Draw every HUD element after all world effects.
+    outlined_text(f"ROUND {round_number}: MERGE MATCHING BALLS TO LEVEL 38", objective_font, (440, 30))
     if won:
-        win_text = big_font.render("You win!", True, "WHITE")
-        screen.blit(win_text, win_text.get_rect(center=(WINDOW_WIDTH // 2, 100)))
+        seconds = max(0, math.ceil((transition_at - pygame.time.get_ticks()) / 1000))
+        status = f"ROUND WON! Next round in {seconds}s"
+        color = (120, 255, 150)
+    elif lost:
+        seconds = max(0, math.ceil((transition_at - pygame.time.get_ticks()) / 1000))
+        status = f"TIME UP! Restarting in {seconds}s (R: restart now)"
+        color = (255, 120, 100)
     else:
-        clock_text = big_font.render(countdown_text, True, "RED")
-        screen.blit(clock_text, clock_text.get_rect(center=(WINDOW_WIDTH // 2, 100)))
+        status = f"TIME LEFT: {countdown_counter}s"
+        color = (255, 120, 100) if countdown_counter <= 20 else (255, 230, 110)
+    outlined_text(status, timer_font, (440, 73), color)
+    highest = max((ball.level for ball in balls if ball.active), default=0)
+    outlined_text(f"Ball: {highest}/38   Score: {score}   Best: {high_score}", font, (440, 110))
+    if show_hints:
+        for index, line in enumerate(hint_lines):
+            outlined_text(line, font, (15, 155 + index * 21), top_left=True)
+    else:
+        outlined_text("Press [H] to show controls.", font, (15, 155), top_left=True)
+    draw_max_balls()
+    draw_attraction_bar()
+    outlined_text(f"balls per click: {ballsPerClick}", ballsPerClickFont, (20, WINDOW_HEIGHT - 35), "GREEN", top_left=True)
+    outlined_text("(use + or -)", ballsPerClickPlusMinusFont, (220, WINDOW_HEIGHT - 33), "GREEN", top_left=True)
 
     pygame.display.flip()
     clock.tick(FPS)
