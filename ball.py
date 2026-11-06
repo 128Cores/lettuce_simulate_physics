@@ -1,4 +1,5 @@
 import random
+from functools import lru_cache
 
 import pygame
 
@@ -7,9 +8,14 @@ from constants import ROOM_TEMP
 from fire_effect import FireEffect
 
 
+@lru_cache(maxsize=64)
+def load_ball_image(image_path):
+    return pygame.image.load(image_path).convert_alpha()
+
+
 def make_circular_image(image_path, radius):
     size = radius * 2
-    raw_image = pygame.image.load(image_path).convert_alpha()
+    raw_image = load_ball_image(image_path)
     scaled_image = pygame.transform.scale(raw_image, (size, size))
 
     # Create a circular mask
@@ -30,6 +36,8 @@ max_burn_level = (
 ashes = []  # just like how the balls spawn
 
 class Ball:
+    ash_spacing = 8
+
     def __init__(
         self,
         x_pos,
@@ -152,8 +160,8 @@ class Ball:
             if self.deathSound is not None:
                 self.deathSound.play()
             # ASHES nonsense here
-            for dx in range(-int(self.radius), int(self.radius) + 1, 8):
-                for dy in range(-int(self.radius), int(self.radius) + 1, 8):
+            for dx in range(-int(self.radius), int(self.radius) + 1, self.ash_spacing):
+                for dy in range(-int(self.radius), int(self.radius) + 1, self.ash_spacing):
                     if (
                         dx * dx + dy * dy <= self.radius * self.radius
                     ):  ##literally span then inside the entire ball circle

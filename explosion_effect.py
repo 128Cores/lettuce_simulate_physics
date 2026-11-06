@@ -1,7 +1,13 @@
 import pygame
+from functools import lru_cache
 from particle import Particle
 from utils import load_spritesheet
 from constants import EXPLOSION_PATH
+
+@lru_cache(maxsize=1)
+def explosion_frames():
+    return load_spritesheet(EXPLOSION_PATH, 1, 12)
+
 
 class ExplosionEffect:
     def __init__(self, ball_x, ball_y, ball_size, explosionSound=None):
@@ -14,7 +20,7 @@ class ExplosionEffect:
         self.counter = 0
         self.finished = False
         self.active = True
-        self.frames = load_spritesheet(EXPLOSION_PATH, 1, 12)
+        self.frames = explosion_frames()
         self.frame = self.frames[self.index]
         self.explosion_size = int(
             self.ball_size * self.explosion_size_mult

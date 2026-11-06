@@ -3,6 +3,8 @@ from particle import Particle
 
 
 class FireEffect:
+    particle_limit = 20
+
     def __init__(self, ball_x, ball_y, ball_size):
         self.ball_x = ball_x
         self.ball_y = ball_y
@@ -47,7 +49,7 @@ class FireEffect:
     def remove_particle(self, particle):
         self.particles.remove(particle)
         # Add a new particle to the end of the list if the effect is still active
-        if self.active:
+        if self.active and len(self.particles) < self.particle_limit:
             self.add_particle()
 
     # Update the ball position to the ball's position
@@ -57,8 +59,15 @@ class FireEffect:
 
     # Runs the particles in a fire-like animation
     def update(self):
-        if len(self.particles) < 20 and self.active:
-            self.add_particle()
+        if len(self.particles) > self.particle_limit:
+            del self.particles[self.particle_limit:]
+        if self.active:
+            spawn_count = min(
+                self.particle_limit - len(self.particles),
+                max(1, (self.particle_limit + self.particle_lifetime - 1) // self.particle_lifetime),
+            )
+            for _ in range(spawn_count):
+                self.add_particle()
         for particle in self.particles:
             particle.update()
             if particle.time > particle.end_time:

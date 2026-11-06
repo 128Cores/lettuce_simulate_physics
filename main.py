@@ -1,4 +1,6 @@
 import math
+from functools import lru_cache
+from collections import deque
 import json
 from pathlib import Path
 import random
@@ -7,6 +9,7 @@ import sys
 import pygame
 
 from ball import Ball, ashes
+from fire_effect import FireEffect
 from constants import *
 from dice import Dice
 from explosion_effect import ExplosionEffect
@@ -33,7 +36,12 @@ damageSound = pygame.mixer.Sound(f"assets/sounds/minecraft-damage.mp3")
 deathSound = pygame.mixer.Sound(f"assets/sounds/minecraft-death.mp3")
 explosionSound = pygame.mixer.Sound(f"assets/sounds/minecraft-explosion.mp3")
 water_sound = pygame.mixer.Sound("assets/sounds/water-splash.mp3")
-water_sound.set_volume(0.6)
+#water_sound.set_volume(0.6)
+win_sound = pygame.mixer.Sound("assets/sounds/win-music.mp3")
+lose_sound = pygame.mixer.Sound("assets/sounds/loser-horn.mp3")
+pygame.mixer.set_reserved(2)
+outcome_channel = pygame.mixer.Channel(0)
+water_channel = pygame.mixer.Channel(1)
 
 backgroundMusic = pygame.mixer.music.load(f"assets/sounds/fortnite-corail.mp3")
 # backgroundMusic = pygame.mixer.music.load(f"assets/sounds/monkey.mp3")
@@ -55,6 +63,7 @@ water_drops = []
 background_image = pygame.image.load("assets/background/background.png")
 hint_lines = [
     "Left click: spawn / grab a ball; release to throw",
+    "Left click on ball: Cool it and put out fire (repeat if hot)",
     "Right click: ignite a ball",
     "Shift + left drag: lasso balls to explode",
     "Hold G: attract balls (uses blue energy bar)",
@@ -93,6 +102,9 @@ mouse_trajectory = []
 
 balls = []  ##starts empty, click an empty spot to spawn a ball
 explosions = []
+finale_balls = deque()
+next_finale_burst = 0
+next_particle_check = 1000
 dice = Dice(900, 25)
 current_level = 4
 won = False
@@ -201,6 +213,8 @@ def start_round(number):
     global round_number, round_deadline, countdown_counter, won, lost, transition_at
     global current_level, attraction_energy, numFramesToSpawnBalls, exactRemainingBalls
     global ballsToSpawnPerFrame, lasso_active, lasso_fade_start
+    outcome_channel.stop()
+    finale_balls.clear()
     round_number = number
     duration = 30 + 90 / (1 + 0.15 * (number - 1))
     round_deadline = pygame.time.get_ticks() + duration * 1000
@@ -221,6 +235,36 @@ def start_round(number):
     pygame.time.set_timer(pygame.USEREVENT, 1000)
 
 
+def start_finale(sound):
+    global next_finale_burst
+    finale_balls.clear()
+    for ball in balls:
+        if ball.active and len(finale_balls) < 6:
+            finale_balls.append(ball)
+        ball.grabbed = False
+    next_finale_burst = 0
+    outcome_channel.play(sound)
+
+
+def update_finale(now):
+    global next_finale_burst
+    if now < next_finale_burst or transition_at is None or now >= transition_at:
+        return
+    next_finale_burst = now + 350
+    while finale_balls and not finale_balls[0].active:
+        finale_balls.popleft()
+    if finale_balls:
+        ball = finale_balls.popleft()
+        x, y, radius = ball.x_pos, ball.y_pos, ball.radius
+    else:
+        x = random.randint(120, WINDOW_WIDTH - 120)
+        y = random.randint(200, WINDOW_HEIGHT - 80)
+        radius = random.randint(30, 50)
+    explosion = ExplosionEffect(x, y, radius, explosionSound)
+    explosions.append(explosion)
+    explosion_knockback(x, y, balls, explosion.blast_radius)
+
+
 def save_high_score():
     global high_score
     if score > high_score:
@@ -234,16 +278,23 @@ def save_high_score():
 def splash_water(x, y):
     if won or lost:
         return
-    water_sound.play()
+    water_channel.play(water_sound)
     # A wide burst with sideways momentum, rather than a continuous stream.
     for _ in range(60):
         water_drops.append([x + random.uniform(-24, 24), y + random.uniform(-12, 12),
                             random.uniform(-6, 6), random.uniform(-4, 5), 0])
 
 
+@lru_cache(maxsize=256)
+def rendered_text(text, text_font, color):
+    return (
+        text_font.render(text, True, color),
+        text_font.render(text, True, (10, 12, 18)),
+    )
+
+
 def outlined_text(text, text_font, center, color="WHITE", *, top_left=False):
-    image = text_font.render(text, True, color)
-    outline = text_font.render(text, True, (10, 12, 18))
+    image, outline = rendered_text(text, text_font, color)
     rect = image.get_rect(topleft=center) if top_left else image.get_rect(center=center)
     for dx, dy in ((-2, 0), (2, 0), (0, -2), (0, 2), (-2, -2), (2, 2), (-2, 2), (2, -2)):
         screen.blit(outline, rect.move(dx, dy))
@@ -442,6 +493,20 @@ while running:
             gravity_enabled = not gravity_enabled
 
     now = pygame.time.get_ticks()
+    if now >= next_particle_check:
+        next_particle_check = now + 1000
+        measured_fps = clock.get_fps()
+        if 0 < measured_fps < 30:
+            FireEffect.particle_limit = max(2, FireEffect.particle_limit // 2)
+            Ball.ash_spacing = min(12, Ball.ash_spacing + 2)
+        elif measured_fps >= 55:
+            FireEffect.particle_limit = min(60, FireEffect.particle_limit + 4)
+            Ball.ash_spacing = max(4, Ball.ash_spacing - 1)
+        elif measured_fps > 45:
+            if FireEffect.particle_limit < 20:
+                FireEffect.particle_limit = min(20, FireEffect.particle_limit + 2)
+            if Ball.ash_spacing > 8:
+                Ball.ash_spacing -= 1
     if transition_at is not None and now >= transition_at:
         if won:
             start_round(round_number + 1)
@@ -452,10 +517,9 @@ while running:
         countdown_counter = max(0, math.ceil((round_deadline - now) / 1000))
         if now >= round_deadline:
             lost = True
-            transition_at = now + 3000
+            transition_at = now + 10000
             numFramesToSpawnBalls = 0
-            for ball in balls:
-                ball.grabbed = False
+            start_finale(lose_sound)
 
     if not won and not lost and numFramesToSpawnBalls > 0:
         extra = exactRemainingBalls if numFramesToSpawnBalls == 1 else 0
@@ -494,38 +558,31 @@ while running:
         mouse_trajectory.pop(0)
 
     ##UPDATE POSITIONS
-    # Make a copy of the ball list
-    for ball in balls.copy():
-        # If a ball is inactive
-        if not ball.active:
-            # Remove it from the original list (this will stop it from being rendered)
-            # The copy list is necessary because if you looped through the original list,
-            #     I think it would break because the index you're on is no longer a thing
-            balls.remove(ball)
+    balls[:] = [ball for ball in balls if ball.active]
 
     # Add gravity interaction to each ball
-    for i, ball_1 in enumerate(balls):
-        acceleration_x = 0
-        acceleration_y = 0
+    if gravity_enabled:
+        for i, ball_1 in enumerate(balls):
+            acceleration_x = 0
+            acceleration_y = 0
 
-        for j, ball_2 in enumerate(balls):
-            # doesnt have gravity on itself
-            if i == j:
-                continue
+            for j, ball_2 in enumerate(balls):
+                # doesnt have gravity on itself
+                if i == j:
+                    continue
 
-            # gravity formula
-            # if gravity_enabled:
-            distance_x = ball_2.x_pos - ball_1.x_pos
-            distance_y = ball_2.y_pos - ball_1.y_pos
-            squared_distance = distance_x * distance_x + distance_y * distance_y
-            force = gravity * ball_2.mass / (squared_distance + 0.001)
+                # gravity formula
+                # if gravity_enabled:
+                distance_x = ball_2.x_pos - ball_1.x_pos
+                distance_y = ball_2.y_pos - ball_1.y_pos
+                squared_distance = distance_x * distance_x + distance_y * distance_y
+                force = gravity * ball_2.mass / (squared_distance + 0.001)
 
-            # get acceleration on each direction
-            acceleration_x += force * distance_x
-            acceleration_y += force * distance_y
+                # get acceleration on each direction
+                acceleration_x += force * distance_x
+                acceleration_y += force * distance_y
 
-        # apply half of ball_2's force into ball_1 (to make the game not so easy, sorry!)
-        if gravity_enabled:
+            # apply half of ball_2's force into ball_1 (to make the game not so easy, sorry!)
             ball_1.apply_forces(acceleration_x / 2, acceleration_y / 2)
 
     # update each ball after calculations
@@ -570,8 +627,7 @@ while running:
         score += 1000 + countdown_counter * 10
         save_high_score()
         numFramesToSpawnBalls = 0
-        for ball in balls:
-            ball.grabbed = False
+        start_finale(win_sound)
     handle_ash_collisions(ashes)
 
     for ball in balls:
@@ -581,7 +637,9 @@ while running:
 
     # Random explosion
     # These are kinda weird / unexpected -> turn in to meteorites?
-    if random.randint(1, 4000) < 30:
+    if won or lost:
+        update_finale(now)
+    elif random.randint(1, 4000) < 30:
         x = random.randint(WALL_THICKNESS + 10, WINDOW_WIDTH - WALL_THICKNESS - 10)
         y = random.randint(WALL_THICKNESS + 10, WINDOW_HEIGHT - WALL_THICKNESS - 10)
 
@@ -652,16 +710,21 @@ while running:
     outlined_text(f"ROUND {round_number}: MERGE MATCHING BALLS TO LEVEL 38", objective_font, (440, 30))
     if won:
         seconds = max(0, math.ceil((transition_at - pygame.time.get_ticks()) / 1000))
-        status = f"ROUND WON! Next round in {seconds}s"
+        status = f"Next round in {seconds}s"
         color = (120, 255, 150)
     elif lost:
         seconds = max(0, math.ceil((transition_at - pygame.time.get_ticks()) / 1000))
-        status = f"TIME UP! Restarting in {seconds}s (R: restart now)"
+        status = f"Restarting in {seconds}s (R: restart now)"
         color = (255, 120, 100)
     else:
         status = f"TIME LEFT: {countdown_counter}s"
         color = (255, 120, 100) if countdown_counter <= 20 else (255, 230, 110)
-    outlined_text(status, timer_font, (440, 73), color)
+    if won or lost:
+        outlined_text("YOU WIN!" if won else "YOU LOSE!", timer_font,
+                      (WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2), color)
+        outlined_text(status, timer_font, (440, 73), "WHITE")
+    else:
+        outlined_text(status, timer_font, (440, 73), color)
     highest = max((ball.level for ball in balls if ball.active), default=0)
     outlined_text(f"Ball: {highest}/38   Score: {score}   Best: {high_score}", font, (440, 110))
     if show_hints:
@@ -671,9 +734,7 @@ while running:
         outlined_text("Press [H] to show controls.", font, (15, 155), top_left=True)
     draw_max_balls()
     draw_attraction_bar()
-    outlined_text(f"balls per click: {ballsPerClick}", ballsPerClickFont, (20, WINDOW_HEIGHT - 35), "GREEN", top_left=True)
-    outlined_text("(use + or -)", ballsPerClickPlusMinusFont, (220, WINDOW_HEIGHT - 33), "GREEN", top_left=True)
-
+    outlined_text(f"Balls per click: {ballsPerClick}", ballsPerClickFont, (20, WINDOW_HEIGHT - 35), "GREEN", top_left=True)
     pygame.display.flip()
     clock.tick(FPS)
 
